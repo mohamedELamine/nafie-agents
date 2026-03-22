@@ -79,29 +79,49 @@ services:
 
   platform:
     build:
-      context: .
+      context: ./agents/platform/platform-agent
       dockerfile: Dockerfile
-    container_name: ar_themes_platform
+    container_name: nafic_platform_agent
     restart: unless-stopped
     environment:
-      AGENT_NAME:          platform
-      REDIS_URL:           redis://redis:6379
-      DATABASE_URL:        postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB}
-      ANTHROPIC_API_KEY:   ${ANTHROPIC_API_KEY}
-      LANGSMITH_API_KEY:   ${LANGSMITH_API_KEY}
-      WOO_BASE_URL:        ${WOO_BASE_URL}
-      WOO_CONSUMER_KEY:    ${WOO_CONSUMER_KEY}
-      WOO_CONSUMER_SECRET: ${WOO_CONSUMER_SECRET}
-      WP_USERNAME:         ${WP_USERNAME}
-      WP_APP_PASSWORD:     ${WP_APP_PASSWORD}
-      LOG_LEVEL:           ${LOG_LEVEL:-INFO}
-    command: python -m agents.platform.agent
+      # --- Lemon Squeezy ---
+      LS_API_KEY:           ${LS_API_KEY}
+      LS_STORE_ID:          ${LS_STORE_ID}
+      LS_WEBHOOK_SECRET:    ${LS_WEBHOOK_SECRET}
+      LS_VIP_PRODUCT_ID:    ${LS_VIP_PRODUCT_ID}
+      # --- WordPress ---
+      WP_SITE_URL:          ${WP_SITE_URL:-https://nafic.com}
+      WP_API_USER:          ${WP_API_USER:-platform_agent}
+      WP_API_PASSWORD:      ${WP_API_PASSWORD}
+      # --- Infrastructure ---
+      REDIS_URL:            redis://redis:6379
+      DATABASE_URL:         postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/platform_db
+      # --- Email ---
+      RESEND_API_KEY:       ${RESEND_API_KEY}
+      STORE_EMAIL_FROM:     ${STORE_EMAIL_FROM:-نافع <hello@nafic.com>}
+      STORE_URL:            ${STORE_URL:-https://nafic.com}
+      OWNER_EMAIL:          ${OWNER_EMAIL}
+      # --- Claude ---
+      CLAUDE_API_KEY:       ${ANTHROPIC_API_KEY}
+      CLAUDE_MODEL:         ${CLAUDE_MODEL:-claude-opus-4-6}
+      # --- Business Rules ---
+      HUMAN_REVIEW_TIMEOUT_HOURS: ${HUMAN_REVIEW_TIMEOUT_HOURS:-48}
+      ASSET_INITIAL_WAIT_HOURS:   ${ASSET_INITIAL_WAIT_HOURS:-4}
+      ASSET_EXTENSION_HOURS:      ${ASSET_EXTENSION_HOURS:-4}
+      MAX_REVISION_CYCLES:        ${MAX_REVISION_CYCLES:-3}
+      LOG_LEVEL:            ${LOG_LEVEL:-INFO}
+    ports:
+      - "8001:8000"
     depends_on:
       redis:    { condition: service_healthy }
       postgres: { condition: service_healthy }
     volumes:
-      - ./:/app
       - themes_output:/app/themes_output
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # ── وكيل الدعم ──────────────────────────────────────────────
 
