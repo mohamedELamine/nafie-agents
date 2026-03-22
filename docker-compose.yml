@@ -1,0 +1,290 @@
+version: "3.9"
+
+# ══════════════════════════════════════════════════════════════
+# منظومة قوالب WordPress العربية — Docker Compose
+# تشغيل: docker-compose up -d
+# ══════════════════════════════════════════════════════════════
+
+services:
+
+  # ── البنية التحتية ──────────────────────────────────────────
+
+  redis:
+    image: redis:7-alpine
+    container_name: ar_themes_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./infrastructure/redis/redis.conf:/usr/local/etc/redis/redis.conf
+      - redis_data:/data
+    command: redis-server /usr/local/etc/redis/redis.conf
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: ar_themes_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       ${POSTGRES_DB:-ar_themes}
+      POSTGRES_USER:     ${POSTGRES_USER:-ar_themes_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ar_themes_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── وكيل المدير العام ───────────────────────────────────────
+
+  supervisor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ar_themes_supervisor
+    restart: unless-stopped
+    environment:
+      AGENT_NAME:          supervisor
+      REDIS_URL:           redis://redis:6379
+      DATABASE_URL:        postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB}
+      ANTHROPIC_API_KEY:   ${ANTHROPIC_API_KEY}
+      LANGSMITH_API_KEY:   ${LANGSMITH_API_KEY}
+      LANGSMITH_PROJECT:   ${LANGSMITH_PROJECT:-ar-themes-ecosystem}
+      TELEGRAM_BOT_TOKEN:  ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHAT_ID:    ${TELEGRAM_CHAT_ID}
+      LOG_LEVEL:           ${LOG_LEVEL:-INFO}
+    command: python -m supervisor.agent
+    depends_on:
+      redis:    { condition: service_healthy }
+      postgres: { condition: service_healthy }
+    volumes:
+      - ./:/app
+      - visuals:/app/visuals
+    healthcheck:
+      test: ["CMD", "python", "-c", "import redis; redis.Redis(host='redis').ping()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── وكيل المنصة ─────────────────────────────────────────────
+
+  platform:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ar_themes_platform
+    restart: unless-stopped
+    environment:
+      AGENT_NAME:          platform
+      REDIS_URL:           redis://redis:6379
+      DATABASE_URL:        postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB}
+      ANTHROPIC_API_KEY:   ${ANTHROPIC_API_KEY}
+      LANGSMITH_API_KEY:   ${LANGSMITH_API_KEY}
+      WOO_BASE_URL:        ${WOO_BASE_URL}
+      WOO_CONSUMER_KEY:    ${WOO_CONSUMER_KEY}
+      WOO_CONSUMER_SECRET: ${WOO_CONSUMER_SECRET}
+      WP_USERNAME:         ${WP_USERNAME}
+      WP_APP_PASSWORD:     ${WP_APP_PASSWORD}
+      LOG_LEVEL:           ${LOG_LEVEL:-INFO}
+    command: python -m agents.platform.agent
+    depends_on:
+      redis:    { condition: service_healthy }
+      postgres: { condition: service_healthy }
+    volumes:
+      - ./:/app
+      - themes_output:/app/themes_output
+
+  # ── وكيل الدعم ──────────────────────────────────────────────
+
+  support:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ar_themes_support
+    restart: unless-stopped
+    environment:
+      AGENT_NAME:        support
+      REDIS_URL:         redis://redis:6379
+      DATABASE_URL:      postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY}
+      LOG_LEVEL:         ${LOG_LEVEL:-INFO}
+    command: python -m agents.support.agent
+    depends_on:
+      redis:    { condition: service_healthy }
+      postgres: { condition: service_healthy }
+    volumes:
+      - ./:/app
+      - rag_data:/app/rag_data
+
+  # ── وكيل المحتوى ────────────────────────────────────────────
+
+  content:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ar_themes_content
+    restart: unless-stopped
+    environment:
+      AGENT_NAME:        content
+      REDIS_URL:         redis://redis:6379
+      DATABASE_URL:      postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY}
+      LOG_LEVEL:         ${LOG_LEVEL:-INFO}
+    command: python -m agents.content.agent
+    depends_on:
+      redis:    { condition: service_healthy }
+      postgres: { condition: service_healthy }
+    volumes:
+      - ./:/app
+
+  # ── وكيل التسويق ────────────────────────────────────────────
+
+  marketing:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ar_themes_marketing
+    restart: unless-stopped
+    environment:
+      AGENT_NAME:           marketing
+      REDIS_URL:            redis://redis:6379
+      DATABASE_URL:         postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB}
+      ANTHROPIC_API_KEY:    ${ANTHROPIC_API_KEY}
+      LANGSMITH_API_KEY:    ${LANGSMITH_API_KEY}
+      MAILERLITE_API_KEY:   ${MAILERLITE_API_KEY}
+      TWITTER_BEARER_TOKEN: ${TWITTER_BEARER_TOKEN}
+      TWITTER_API_KEY:      ${TWITTER_API_KEY}
+      TWITTER_API_SECRET:   ${TWITTER_API_SECRET}
+      META_ACCESS_TOKEN:    ${META_ACCESS_TOKEN}
+      META_PAGE_ID:         ${META_PAGE_ID}
+      TELEGRAM_BOT_TOKEN:   ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHANNEL_ID:  ${TELEGRAM_CHANNEL_ID}
+      LOG_LEVEL:            ${LOG_LEVEL:-INFO}
+    command: python -m agents.marketing.agent
+    depends_on:
+      redis:    { condition: service_healthy }
+      postgres: { condition: service_healthy }
+    volumes:
+      - ./:/app
+
+  # ── وكيل التحليل ────────────────────────────────────────────
+
+  analytics:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ar_themes_analytics
+    restart: unless-stopped
+    environment:
+      AGENT_NAME:        analytics
+      REDIS_URL:         redis://redis:6379
+      DATABASE_URL:      postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY}
+      GA4_PROPERTY_ID:   ${GA4_PROPERTY_ID}
+      GA4_CREDENTIALS:   ${GA4_CREDENTIALS}
+      WOO_BASE_URL:      ${WOO_BASE_URL}
+      WOO_CONSUMER_KEY:  ${WOO_CONSUMER_KEY}
+      WOO_CONSUMER_SECRET: ${WOO_CONSUMER_SECRET}
+      LOG_LEVEL:         ${LOG_LEVEL:-INFO}
+    command: python -m agents.analytics.agent
+    depends_on:
+      redis:    { condition: service_healthy }
+      postgres: { condition: service_healthy }
+    volumes:
+      - ./:/app
+
+  # ── وكيل الإنتاج البصري ─────────────────────────────────────
+
+  visual_production:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ar_themes_visual
+    restart: unless-stopped
+    environment:
+      AGENT_NAME:          visual_production
+      REDIS_URL:           redis://redis:6379
+      DATABASE_URL:        postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB}
+      ANTHROPIC_API_KEY:   ${ANTHROPIC_API_KEY}
+      LANGSMITH_API_KEY:   ${LANGSMITH_API_KEY}
+      FLUX_API_KEY:        ${FLUX_API_KEY}
+      IDEOGRAM_API_KEY:    ${IDEOGRAM_API_KEY}
+      KLING_API_KEY:       ${KLING_API_KEY}
+      KLING_ACCESS_KEY:    ${KLING_ACCESS_KEY}
+      PIKA_API_KEY:        ${PIKA_API_KEY}
+      LOG_LEVEL:           ${LOG_LEVEL:-INFO}
+    command: python -m agents.visual_production.agent
+    depends_on:
+      redis:    { condition: service_healthy }
+      postgres: { condition: service_healthy }
+    volumes:
+      - ./:/app
+      - visuals:/app/visuals
+
+  # ── واجهة API ────────────────────────────────────────────────
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ar_themes_api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      REDIS_URL:         redis://redis:6379
+      DATABASE_URL:      postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      LOG_LEVEL:         ${LOG_LEVEL:-INFO}
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+    depends_on:
+      redis:    { condition: service_healthy }
+      postgres: { condition: service_healthy }
+    volumes:
+      - ./:/app
+
+  # ── Nginx ────────────────────────────────────────────────────
+
+  nginx:
+    image: nginx:alpine
+    container_name: ar_themes_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./infrastructure/nginx/ssl:/etc/nginx/ssl
+    depends_on:
+      - api
+
+# ══════════════════════════════════════════════════════════════
+# الأحجام المستمرة
+# ══════════════════════════════════════════════════════════════
+
+volumes:
+  redis_data:
+  postgres_data:
+  themes_output:
+  visuals:
+  rag_data:
+
+# ══════════════════════════════════════════════════════════════
+# الشبكات
+# ══════════════════════════════════════════════════════════════
+
+networks:
+  default:
+    name: ar_themes_network
