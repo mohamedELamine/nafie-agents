@@ -22,9 +22,7 @@ def mark_started(
                 INSERT INTO support_execution_log (
                     execution_id, ticket_id, platform, started_at, status
                 ) VALUES (%s, %s, %s, %s, 'in_progress')
-                ON CONFLICT (execution_id) DO UPDATE SET
-                    status = 'in_progress',
-                    started_at = EXCLUDED.started_at
+                ON CONFLICT (execution_id) DO NOTHING
                 """,
                 (execution_id, ticket_id, platform, datetime.utcnow()),
             )

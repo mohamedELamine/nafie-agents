@@ -20,9 +20,7 @@ def save_escalation(
                     escalation_id, ticket_id, ticket_platform, escalation_reason,
                     original_message, customer_identity, current_agent_context, escalation_time
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (escalation_id) DO UPDATE SET
-                    resolution_status = EXCLUDED.resolution_status,
-                    escalation_time = EXCLUDED.escalation_time
+                ON CONFLICT (escalation_id) DO NOTHING
                 """,
                 (
                     escalation["escalation_id"],

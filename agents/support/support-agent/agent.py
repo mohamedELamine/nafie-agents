@@ -2,10 +2,17 @@
 Support agent — LangGraph StateGraph pipeline.
 Routing: HelpScout/Facebook tickets → classify → retrieve → answer / escalate.
 """
+import asyncio
+import os
+import sys
 from typing import Any, Dict, List, Optional
 
 from langgraph.graph import END, START, StateGraph
 from typing_extensions import TypedDict
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+from core.base_agent import BaseAgent
+from core.state import AgentName, BusinessEvent, EventType
 
 from .logging_config import get_logger
 from .nodes.ticket_receiver import make_ticket_receiver_node
@@ -208,3 +215,38 @@ def run_support_pipeline(
     except Exception as e:
         logger.error(f"Pipeline error for ticket {ticket_data.get('ticket_id')}: {e}")
         return {"success": False, "error": str(e)}
+
+
+# ── BaseAgent subclass ─────────────────────────────────────────────
+
+class SupportAgent(BaseAgent):
+    """Support agent — inherits BaseAgent for Redis, heartbeats, and supervision."""
+
+    agent_name = AgentName.SUPPORT
+
+    async def setup_handlers(self) -> None:
+        await self.bus.subscribe(EventType.TICKET_CREATED, self.run)
+
+    async def run(self, event: BusinessEvent) -> None:
+        try:
+            result = run_support_pipeline(
+                ticket_data=event["payload"],
+                helpscout_client=None,  # injected at startup
+                claude_client=None,
+                qdrant_client=None,
+                resend_client=None,
+                redis_bus=None,
+            )
+            if result.get("success"):
+                await self.emit(
+                    EventType.TICKET_RESOLVED,
+                    result,
+                    trace_id=event.get("trace_id"),
+                )
+        except Exception as e:
+            await self.emit_error(str(e), trace_id=event.get("trace_id"))
+
+
+if __name__ == "__main__":
+    agent = SupportAgent()
+    asyncio.run(agent.start())

@@ -1,8 +1,7 @@
 """
-Connection pool for visual-production-agent.
+Connection pool for content-agent.
 All DB access must go through get_conn() — Constitutional Law II.
 """
-import logging
 import os
 from contextlib import contextmanager
 from typing import Generator
@@ -10,35 +9,41 @@ from typing import Generator
 import psycopg2
 from psycopg2 import pool
 
-logger = logging.getLogger("visual_production.db.connection")
+from logging_config import get_logger
+
+logger = get_logger("db.connection")
 
 _pool: pool.SimpleConnectionPool | None = None
 
+
 def init_pool(minconn: int = 2, maxconn: int = 10) -> None:
+    """Initialise the global connection pool (call once at startup)."""
     global _pool
-    dsn = os.environ.get("VISUAL_DATABASE_URL")
-    if not dsn:
-        raise RuntimeError("VISUAL_DATABASE_URL environment variable is not set")
-    _pool = pool.SimpleConnectionPool(minconn, maxconn, dsn=dsn)
-    logger.info("Visual-production DB pool initialised")
+    database_url = os.getenv("DATABASE_URL")
+    if not database_url:
+        raise RuntimeError("DATABASE_URL environment variable is not set")
+
+    _pool = pool.SimpleConnectionPool(minconn, maxconn, dsn=database_url)
+    logger.info("Content-agent DB pool initialised")
 
 
 def close_pool() -> None:
+    """Close all connections in the pool (call on shutdown)."""
     global _pool
     if _pool:
         _pool.closeall()
         _pool = None
-        logger.info("Visual-production DB pool closed")
+        logger.info("Content-agent DB pool closed")
 
 
 @contextmanager
 def get_conn() -> Generator[psycopg2.extensions.connection, None, None]:
+    """Context-manager: checks out a connection and returns it when done."""
     if _pool is None:
         raise RuntimeError("DB pool not initialised — call init_pool() first")
     conn = _pool.getconn()
     try:
         yield conn
-        conn.commit()
     except Exception:
         conn.rollback()
         raise

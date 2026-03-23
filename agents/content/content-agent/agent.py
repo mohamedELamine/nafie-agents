@@ -5,9 +5,16 @@ Content Agent — Graph Builder
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
+import sys
 from typing import Optional
+
+# Add parent directories to path for core imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+from core.base_agent import BaseAgent
+from core.state import AgentName, BusinessEvent, EventType
 
 from langgraph.graph import END, StateGraph
 
@@ -143,3 +150,35 @@ def run_content_pipeline(request: ContentRequest, **services) -> dict:
         request.request_id, result.get("status"),
     )
     return result
+
+
+# ── BaseAgent subclass ─────────────────────────────────────────────
+
+class ContentAgent(BaseAgent):
+    """Content agent — inherits BaseAgent for Redis, heartbeats, and supervision."""
+
+    agent_name = AgentName.CONTENT
+
+    async def setup_handlers(self) -> None:
+        await self.bus.subscribe(
+            EventType.CONTENT_REQUESTED,
+            self.run,
+        )
+
+    async def run(self, event: BusinessEvent) -> None:
+        try:
+            request = ContentRequest(**event["payload"])
+            result = run_content_pipeline(request)
+            if result.get("status") == "completed":
+                await self.emit(
+                    EventType.CONTENT_READY,
+                    result,
+                    trace_id=event.get("trace_id"),
+                )
+        except Exception as e:
+            await self.emit_error(str(e), trace_id=event.get("trace_id"))
+
+
+if __name__ == "__main__":
+    agent = ContentAgent()
+    asyncio.run(agent.start())

@@ -19,10 +19,9 @@ _pool: pool.SimpleConnectionPool | None = None
 def init_pool(minconn: int = 2, maxconn: int = 10) -> None:
     """Initialise the global connection pool (call once at startup)."""
     global _pool
-    dsn = os.environ.get(
-        "SUPPORT_DATABASE_URL",
-        "postgresql://support:password@localhost:5432/support_db",
-    )
+    dsn = os.environ.get("SUPPORT_DATABASE_URL")
+    if not dsn:
+        raise RuntimeError("SUPPORT_DATABASE_URL environment variable is not set")
     _pool = pool.SimpleConnectionPool(minconn, maxconn, dsn)
     logger.info(f"Connection pool initialised (min={minconn}, max={maxconn})")
 

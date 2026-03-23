@@ -6,17 +6,16 @@ Content Registry — ذاكرة المحتوى
 from __future__ import annotations
 
 import json
-import logging
-import os
 import re
 from typing import Dict, List, Optional
 
-import psycopg2
 import psycopg2.extras
 
+from db.connection import get_conn
+from logging_config import get_logger
 from models import ContentPiece, ContentType
 
-logger = logging.getLogger("content_agent.db.content_registry")
+logger = get_logger("db.content_registry")
 
 
 class ContentRegistryError(Exception):
@@ -28,44 +27,24 @@ class ContentRegistryError(Exception):
 class ContentRegistry:
     """
     يُخزّن: الجمل الكنونية، الأوصاف المعتمدة، وصيغ الميزات.
+    All DB access goes through get_conn() context manager (Law II).
     """
-
-    def __init__(self, database_url: Optional[str] = None):
-        self._dsn  = database_url or os.environ["DATABASE_URL"]
-        self._conn: Optional[psycopg2.extensions.connection] = None
-
-    # ── Connection ────────────────────────────────────────────────
-
-    def _get_conn(self) -> psycopg2.extensions.connection:
-        if self._conn is None or self._conn.closed:
-            self._conn = psycopg2.connect(self._dsn)
-            self._conn.autocommit = False
-        return self._conn
-
-    def _fetchone(self, sql: str, params: list) -> Optional[dict]:
-        with self._get_conn().cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(sql, params)
-            row = cur.fetchone()
-            return dict(row) if row else None
-
-    def _execute(self, sql: str, params: list) -> None:
-        conn = self._get_conn()
-        with conn.cursor() as cur:
-            cur.execute(sql, params)
-        conn.commit()
 
     # ── Canonical Phrases ─────────────────────────────────────────
 
     def get_phrases(self, theme_slug: str) -> Optional[Dict]:
         """جلب الجمل الكنونية لقالب محدد."""
-        row = self._fetchone(
-            "SELECT canonical_phrases FROM content_registry WHERE theme_slug = %s",
-            [theme_slug],
-        )
-        if row and row["canonical_phrases"]:
-            phrases = row["canonical_phrases"]
-            return phrases if isinstance(phrases, dict) else json.loads(phrases)
-        return None
+        with get_conn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT canonical_phrases FROM content_registry WHERE theme_slug = %s",
+                    [theme_slug],
+                )
+                row = cur.fetchone()
+                if row and row["canonical_phrases"]:
+                    phrases = row["canonical_phrases"]
+                    return phrases if isinstance(phrases, dict) else json.loads(phrases)
+                return None
 
     def update_phrases(
         self,
@@ -77,6 +56,7 @@ class ContentRegistry:
         """
         يُحدَّث بعد كل مخرج ناجح بدرجة ≥ 0.80.
         فقط المحتوى الجيد يدخل الـ Registry.
+        Law III: ON CONFLICT DO NOTHING.
         """
         if score < 0.80:
             logger.debug(
@@ -87,17 +67,18 @@ class ContentRegistry:
 
         phrases = _extract_canonical_phrases(str(piece.body), content_type)
 
-        self._execute("""
-            INSERT INTO content_registry (theme_slug, content_type, canonical_phrases, updated_at)
-            VALUES (%s, %s, %s, NOW())
-            ON CONFLICT (theme_slug, content_type) DO UPDATE
-            SET canonical_phrases = %s, updated_at = NOW()
-        """, [
-            theme_slug,
-            content_type.value,
-            json.dumps(phrases, ensure_ascii=False),
-            json.dumps(phrases, ensure_ascii=False),
-        ])
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO content_registry (theme_slug, content_type, canonical_phrases, updated_at)
+                    VALUES (%s, %s, %s, NOW())
+                    ON CONFLICT (theme_slug, content_type) DO NOTHING
+                """, [
+                    theme_slug,
+                    content_type.value,
+                    json.dumps(phrases, ensure_ascii=False),
+                ])
+            conn.commit()
         logger.info(
             "content_registry.updated slug=%s type=%s score=%.2f",
             theme_slug, content_type.value, score,
@@ -111,12 +92,15 @@ class ContentRegistry:
         content_type: ContentType,
     ) -> Optional[str]:
         """آخر إصدار منشور من محتوى نوع معين لقالب محدد."""
-        row = self._fetchone("""
-            SELECT body FROM content_pieces
-            WHERE theme_slug = %s AND content_type = %s AND status = 'ready'
-            ORDER BY created_at DESC LIMIT 1
-        """, [theme_slug, content_type.value])
-        return row["body"] if row else None
+        with get_conn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT body FROM content_pieces
+                    WHERE theme_slug = %s AND content_type = %s AND status = 'ready'
+                    ORDER BY created_at DESC LIMIT 1
+                """, [theme_slug, content_type.value])
+                row = cur.fetchone()
+                return row["body"] if row else None
 
     def save_content_piece(self, piece: ContentPiece) -> None:
         """يحفظ ContentPiece في قاعدة البيانات."""
@@ -125,34 +109,41 @@ class ContentRegistry:
             if isinstance(piece.body, dict)
             else piece.body
         )
-        self._execute("""
-            INSERT INTO content_pieces (
-                content_id, request_id, content_type, variant_label,
-                theme_slug, title, body, metadata, versioning,
-                structural_score, language_score, factual_score, validation_score,
-                validation_issues, status, target_agent, created_at
-            ) VALUES (
-                %s, %s, %s, %s,
-                %s, %s, %s, %s, %s,
-                %s, %s, %s, %s,
-                %s, %s, %s, %s
-            )
-            ON CONFLICT (content_id) DO NOTHING
-        """, [
-            piece.content_id, piece.request_id, piece.content_type.value, piece.variant_label,
-            piece.theme_slug, piece.title, body,
-            json.dumps(piece.metadata,   ensure_ascii=False),
-            json.dumps(piece.versioning, ensure_ascii=False),
-            piece.structural_score, piece.language_score, piece.factual_score, piece.validation_score,
-            json.dumps(piece.validation_issues, ensure_ascii=False),
-            piece.status.value, piece.target_agent, piece.created_at,
-        ])
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO content_pieces (
+                        content_id, request_id, content_type, variant_label,
+                        theme_slug, title, body, metadata, versioning,
+                        structural_score, language_score, factual_score, validation_score,
+                        validation_issues, status, target_agent, created_at
+                    ) VALUES (
+                        %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s,
+                        %s, %s, %s, %s
+                    )
+                    ON CONFLICT (content_id) DO NOTHING
+                """, [
+                    piece.content_id, piece.request_id, piece.content_type.value, piece.variant_label,
+                    piece.theme_slug, piece.title, body,
+                    json.dumps(piece.metadata,   ensure_ascii=False),
+                    json.dumps(piece.versioning, ensure_ascii=False),
+                    piece.structural_score, piece.language_score, piece.factual_score, piece.validation_score,
+                    json.dumps(piece.validation_issues, ensure_ascii=False),
+                    piece.status.value, piece.target_agent, piece.created_at,
+                ])
+            conn.commit()
 
     def get_content_piece(self, content_id: str) -> Optional[dict]:
-        return self._fetchone(
-            "SELECT * FROM content_pieces WHERE content_id = %s",
-            [content_id],
-        )
+        with get_conn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT * FROM content_pieces WHERE content_id = %s",
+                    [content_id],
+                )
+                row = cur.fetchone()
+                return dict(row) if row else None
 
     # ── Human Review Queue ────────────────────────────────────────
 
@@ -164,29 +155,36 @@ class ContentRegistry:
         correlation_id: str,
     ) -> None:
         """يضع المحتوى في طابور المراجعة البشرية."""
-        self._execute("""
-            INSERT INTO content_review_queue (
-                review_key, content_id, content_type, theme_slug,
-                body_preview, validation_score, requester, correlation_id,
-                created_at
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
-            ON CONFLICT (review_key) DO NOTHING
-        """, [
-            review_key,
-            piece.content_id,
-            piece.content_type.value,
-            piece.theme_slug,
-            str(piece.body)[:500],
-            piece.validation_score,
-            requester,
-            correlation_id,
-        ])
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO content_review_queue (
+                        review_key, content_id, content_type, theme_slug,
+                        body_preview, validation_score, requester, correlation_id,
+                        created_at
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                    ON CONFLICT (review_key) DO NOTHING
+                """, [
+                    review_key,
+                    piece.content_id,
+                    piece.content_type.value,
+                    piece.theme_slug,
+                    str(piece.body)[:500],
+                    piece.validation_score,
+                    requester,
+                    correlation_id,
+                ])
+            conn.commit()
 
     def get_review_item(self, review_key: str) -> Optional[dict]:
-        return self._fetchone(
-            "SELECT * FROM content_review_queue WHERE review_key = %s AND decision IS NULL",
-            [review_key],
-        )
+        with get_conn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT * FROM content_review_queue WHERE review_key = %s AND decision IS NULL",
+                    [review_key],
+                )
+                row = cur.fetchone()
+                return dict(row) if row else None
 
     def record_review_decision(
         self,
@@ -194,15 +192,14 @@ class ContentRegistry:
         decision:   str,
         notes:      Optional[str] = None,
     ) -> None:
-        self._execute("""
-            UPDATE content_review_queue
-            SET decision = %s, notes = %s, decided_at = NOW()
-            WHERE review_key = %s
-        """, [decision, notes, review_key])
-
-    def close(self) -> None:
-        if self._conn and not self._conn.closed:
-            self._conn.close()
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE content_review_queue
+                    SET decision = %s, notes = %s, decided_at = NOW()
+                    WHERE review_key = %s
+                """, [decision, notes, review_key])
+            conn.commit()
 
 
 # ── Private Helpers ────────────────────────────────────────────────

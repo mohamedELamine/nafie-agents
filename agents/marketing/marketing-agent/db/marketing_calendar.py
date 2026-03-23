@@ -21,10 +21,7 @@ def save_campaign(
                     content_snapshot, assets_snapshot, 
                     start_date, end_date, status, created_at
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (campaign_id) DO UPDATE SET
-                    title = EXCLUDED.title,
-                    status = EXCLUDED.status,
-                    updated_at = EXCLUDED.created_at
+                ON CONFLICT (campaign_id) DO NOTHING
                 """,
                 (
                     campaign["campaign_id"],
@@ -57,9 +54,7 @@ def schedule_post(conn: psycopg2.extensions.connection, post: Dict[str, Any]) ->
                     asset_snapshot_id, status, variant_label,
                     scheduled_at
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (post_id) DO UPDATE SET
-                    scheduled_time = EXCLUDED.scheduled_time,
-                    status = EXCLUDED.status
+                ON CONFLICT (post_id) DO NOTHING
                 """,
                 (
                     post["post_id"],

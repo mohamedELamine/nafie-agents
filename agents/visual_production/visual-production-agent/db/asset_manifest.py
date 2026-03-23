@@ -25,12 +25,7 @@ def save_manifest(conn, manifest: Dict[str, Any]) -> str:
                 batch_id, theme_slug, version, total_cost, status,
                 notes, assets_json, created_at, updated_at
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
-            ON CONFLICT (batch_id) DO UPDATE SET
-                status     = EXCLUDED.status,
-                total_cost = EXCLUDED.total_cost,
-                notes      = EXCLUDED.notes,
-                assets_json = EXCLUDED.assets_json,
-                updated_at = NOW()
+            ON CONFLICT (batch_id) DO NOTHING
             """,
             (
                 manifest["batch_id"],

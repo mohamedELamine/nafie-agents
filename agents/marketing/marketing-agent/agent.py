@@ -4,9 +4,15 @@ build_marketing_graph() assembles the ordered node sequence and wires
 the dependency objects (DB connection pool, Redis, platform clients).
 run_marketing_pipeline() executes the graph against a MarketingState.
 """
+import asyncio
 import os
+import sys
 from datetime import datetime
 from typing import Any, Dict
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+from core.base_agent import BaseAgent
+from core.state import AgentName, BusinessEvent, EventType
 
 from .db.connection import get_conn
 from .logging_config import get_logger
@@ -116,6 +122,26 @@ def run_marketing_pipeline(state: MarketingState) -> Dict[str, Any]:
                     "reason": result.get("reason"),
                 }
 
+            # Law VI: paid channels require user approval — skip publishing
+            if step_name == "paid_channel_gate" and result.get("needs_user_approval"):
+                logger.warning(
+                    f"Campaign {campaign_id}: paid channels require user approval. "
+                    "Skipping platform_publisher, proceeding to campaign_recorder."
+                )
+                # Skip platform_publisher — jump to campaign_recorder
+                for skip_name, skip_fn in steps:
+                    if skip_name == "campaign_recorder":
+                        recorder_result = skip_fn(state)
+                        results["campaign_recorder"] = recorder_result
+                        break
+                return {
+                    "success": True,
+                    "campaign_id": campaign_id,
+                    "paid_channels_pending_approval": True,
+                    "suggested_channels": result.get("suggested_channels", []),
+                    "results": results,
+                }
+
         logger.info(f"Marketing pipeline completed for campaign {campaign_id}")
         return {
             "success": True,
@@ -134,3 +160,33 @@ def run_marketing_pipeline(state: MarketingState) -> Dict[str, Any]:
                 else "unknown"
             ),
         }
+
+
+# ── BaseAgent subclass ─────────────────────────────────────────────
+
+class MarketingAgent(BaseAgent):
+    """Marketing agent — inherits BaseAgent for Redis, heartbeats, and supervision."""
+
+    agent_name = AgentName.MARKETING
+
+    async def setup_handlers(self) -> None:
+        await self.bus.subscribe(EventType.CONTENT_READY, self.run)
+        await self.bus.subscribe(EventType.VISUAL_READY, self.run)
+
+    async def run(self, event: BusinessEvent) -> None:
+        try:
+            state = MarketingState(**event["payload"])
+            result = run_marketing_pipeline(state)
+            if result.get("success"):
+                await self.emit(
+                    EventType.CAMPAIGN_SENT,
+                    result,
+                    trace_id=event.get("trace_id"),
+                )
+        except Exception as e:
+            await self.emit_error(str(e), trace_id=event.get("trace_id"))
+
+
+if __name__ == "__main__":
+    agent = MarketingAgent()
+    asyncio.run(agent.start())

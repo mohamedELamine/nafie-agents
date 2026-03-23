@@ -19,12 +19,7 @@ def save_report(conn: psycopg2.extensions.connection, report: Dict[str, Any]) ->
                     report_id, period_start, period_end, total_sales,
                     total_revenue, highlights, concerns, generated_at
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (report_id) DO UPDATE SET
-                    total_sales = EXCLUDED.total_sales,
-                    total_revenue = EXCLUDED.total_revenue,
-                    highlights = EXCLUDED.highlights,
-                    concerns = EXCLUDED.concerns,
-                    generated_at = EXCLUDED.generated_at
+                ON CONFLICT (report_id) DO NOTHING
                 """,
                 (
                     report["report_id"],

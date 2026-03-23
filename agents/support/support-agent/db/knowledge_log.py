@@ -17,9 +17,7 @@ def save_update(conn: psycopg2.extensions.connection, update: Dict[str, Any]) ->
                 INSERT INTO support_knowledge_log (
                     update_id, collection, document_id, content, metadata, created_at
                 ) VALUES (%s, %s, %s, %s, %s, %s)
-                ON CONFLICT (update_id) DO UPDATE SET
-                    content = EXCLUDED.content,
-                    metadata = EXCLUDED.metadata
+                ON CONFLICT (update_id) DO NOTHING
                 """,
                 (
                     update["update_id"],
