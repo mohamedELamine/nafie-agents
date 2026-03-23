@@ -1,0 +1,15 @@
+langgraph>=0.2.0
+fastapi>=0.110.0
+psycopg2-binary
+redis[hiredis]
+resend
+apscheduler
+pydantic>=2.0
+pydantic-settings>=2.0
+
+# Optional development dependencies
+# pytest>=7.0
+# pytest-asyncio>=0.21.0
+# black>=23.0
+# ruff>=0.1.0
+# mypy>=1.0
