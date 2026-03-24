@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import json
 import logging
+from contextlib import AbstractContextManager
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import psycopg2
 import psycopg2.extras
@@ -30,12 +31,15 @@ class ProductRegistry:
     """
     واجهة PostgreSQL للـ theme_registry.
 
-    كل instance يعمل مع اتصال قاعدة بيانات واحد مُمرَّر من الخارج.
-    لا connection pooling هنا — الـ pool مسؤولية الـ caller.
+    يستقبل `get_conn` — callable يُعيد context manager لاتصال DB (Law II).
+    كل عملية تحصل على اتصال مستقل من الـ pool عبر `with self._get_conn() as conn`.
     """
 
-    def __init__(self, db_conn: psycopg2.extensions.connection) -> None:
-        self.db = db_conn
+    def __init__(
+        self,
+        get_conn: Callable[[], AbstractContextManager[psycopg2.extensions.connection]],
+    ) -> None:
+        self._get_conn = get_conn
 
     # ─────────────────────────────────────────────────────────
     # T010 — exists
@@ -48,12 +52,13 @@ class ProductRegistry:
         Returns:
             True إذا وُجد، False إذا لم يُوجد.
         """
-        with self.db.cursor() as cur:
-            cur.execute(
-                "SELECT 1 FROM theme_registry WHERE theme_slug = %s LIMIT 1",
-                (theme_slug,),
-            )
-            return cur.fetchone() is not None
+        with self._get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT 1 FROM theme_registry WHERE theme_slug = %s LIMIT 1",
+                    (theme_slug,),
+                )
+                return cur.fetchone() is not None
 
     # ─────────────────────────────────────────────────────────
     # T011 — get
@@ -66,15 +71,16 @@ class ProductRegistry:
         Returns:
             dict يحتوي جميع حقول theme_registry، أو None إذا لم يُوجد.
         """
-        with self.db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(
-                "SELECT * FROM theme_registry WHERE theme_slug = %s",
-                (theme_slug,),
-            )
-            row = cur.fetchone()
-            if row is None:
-                return None
-            return dict(row)
+        with self._get_conn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT * FROM theme_registry WHERE theme_slug = %s",
+                    (theme_slug,),
+                )
+                row = cur.fetchone()
+                if row is None:
+                    return None
+                return dict(row)
 
     # ─────────────────────────────────────────────────────────
     # T012 — save
@@ -107,11 +113,13 @@ class ProductRegistry:
                 %(build_id)s, %(approved_event_id)s, %(launch_idempotency_key)s,
                 NOW(), NOW()
             )
+            ON CONFLICT (launch_idempotency_key) DO NOTHING
         """
         try:
-            with self.db.cursor() as cur:
-                cur.execute(sql, record)
-            self.db.commit()
+            with self._get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(sql, record)
+                conn.commit()
             logger.info(
                 "registry.save | theme=%s version=%s wp_post_id=%s",
                 record.get("theme_slug"),
@@ -119,7 +127,6 @@ class ProductRegistry:
                 record.get("wp_post_id"),
             )
         except psycopg2.Error as exc:
-            self.db.rollback()
             logger.error("registry.save failed | theme=%s | %s", record.get("theme_slug"), exc)
             raise RegistryError("PLT_401", f"Failed to save ThemeRecord: {exc}") from exc
 
@@ -150,16 +157,16 @@ class ProductRegistry:
             WHERE theme_slug = %s
         """
         try:
-            with self.db.cursor() as cur:
-                cur.execute(sql, (new_version, event_id, idempotency_key, theme_slug))
-            self.db.commit()
+            with self._get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(sql, (new_version, event_id, idempotency_key, theme_slug))
+                conn.commit()
             logger.info(
                 "registry.update_version | theme=%s → v%s",
                 theme_slug,
                 new_version,
             )
         except psycopg2.Error as exc:
-            self.db.rollback()
             logger.error(
                 "registry.update_version failed | theme=%s | %s", theme_slug, exc
             )
@@ -175,16 +182,17 @@ class ProductRegistry:
 
         True → يوقف كل workflow جديد حتى التدخل البشري (Constitution VIII).
         """
-        with self.db.cursor() as cur:
-            cur.execute(
-                """
-                SELECT 1 FROM inconsistent_states
-                WHERE theme_slug = %s AND resolved_at IS NULL
-                LIMIT 1
-                """,
-                (theme_slug,),
-            )
-            return cur.fetchone() is not None
+        with self._get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT 1 FROM inconsistent_states
+                    WHERE theme_slug = %s AND resolved_at IS NULL
+                    LIMIT 1
+                    """,
+                    (theme_slug,),
+                )
+                return cur.fetchone() is not None
 
     # ─────────────────────────────────────────────────────────
     # T015 — record_inconsistent_state
@@ -208,17 +216,18 @@ class ProductRegistry:
             VALUES (%s, 'PLT_303', %s, %s, %s, NOW())
         """
         try:
-            with self.db.cursor() as cur:
-                cur.execute(
-                    sql,
-                    (
-                        theme_slug,
-                        json.dumps(wp_state),
-                        json.dumps(ls_state),
-                        json.dumps(context or {}),
-                    ),
-                )
-            self.db.commit()
+            with self._get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        sql,
+                        (
+                            theme_slug,
+                            json.dumps(wp_state),
+                            json.dumps(ls_state),
+                            json.dumps(context or {}),
+                        ),
+                    )
+                conn.commit()
             logger.critical(
                 "INCONSISTENT_STATE recorded | theme=%s | wp=%s ls=%s",
                 theme_slug,
@@ -226,7 +235,6 @@ class ProductRegistry:
                 ls_state,
             )
         except psycopg2.Error as exc:
-            self.db.rollback()
             # نُسجّل الخطأ لكن لا نُوقف — التسجيل أهم من الإيقاف
             logger.critical(
                 "CRITICAL: Failed to record inconsistent state | theme=%s | %s",
@@ -242,11 +250,12 @@ class ProductRegistry:
         """
         جلب جميع القوالب المنشورة — يُستخدم من analytics agent.
         """
-        with self.db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(
-                "SELECT * FROM theme_registry ORDER BY created_at DESC"
-            )
-            return [dict(row) for row in cur.fetchall()]
+        with self._get_conn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT * FROM theme_registry ORDER BY created_at DESC"
+                )
+                return [dict(row) for row in cur.fetchall()]
 
     # ─────────────────────────────────────────────────────────
     # T017 — get_launch_date
@@ -256,13 +265,14 @@ class ProductRegistry:
         """
         تاريخ إطلاق القالب (created_at) — لحسابات analytics.
         """
-        with self.db.cursor() as cur:
-            cur.execute(
-                "SELECT created_at FROM theme_registry WHERE theme_slug = %s",
-                (theme_slug,),
-            )
-            row = cur.fetchone()
-            return row[0] if row else None
+        with self._get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT created_at FROM theme_registry WHERE theme_slug = %s",
+                    (theme_slug,),
+                )
+                row = cur.fetchone()
+                return row[0] if row else None
 
     # ─────────────────────────────────────────────────────────
     # T018 — count_published
@@ -270,7 +280,8 @@ class ProductRegistry:
 
     def count_published(self) -> int:
         """عدد القوالب المنشورة."""
-        with self.db.cursor() as cur:
-            cur.execute("SELECT COUNT(*) FROM theme_registry")
-            row = cur.fetchone()
-            return row[0] if row else 0
+        with self._get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT COUNT(*) FROM theme_registry")
+                row = cur.fetchone()
+                return row[0] if row else 0

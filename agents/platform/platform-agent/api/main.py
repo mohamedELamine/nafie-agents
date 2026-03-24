@@ -5,18 +5,17 @@ Endpoints: /webhooks/lemonsqueezy, /health, /review/{key}, /assets/{key}/decisio
 from __future__ import annotations
 import json
 import logging
-import os
 import time
 import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional
 
-import psycopg2
 from fastapi import FastAPI, Header, HTTPException, Request, BackgroundTasks
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from commerce.webhook_handler import CommerceEventConsumer
+from db.connection import init_pool, close_pool, get_conn
 from db.registry import ProductRegistry
 from logging_config import configure_logging
 from services.redis_bus import RedisBus
@@ -38,19 +37,19 @@ async def lifespan(app: FastAPI):
     configure_logging()
     global _redis_bus, _registry, _consumer, _watchdog
 
+    init_pool()
     _redis_bus = RedisBus()
-    db_conn = psycopg2.connect(os.environ["DATABASE_URL"])
-    _registry = ProductRegistry(db_conn)
+    _registry = ProductRegistry(get_conn)
     _consumer = CommerceEventConsumer(_redis_bus)
     resend = ResendClient()
-    _watchdog = TimeoutWatchdog(db_conn, resend)
+    _watchdog = TimeoutWatchdog(get_conn, resend)
     _watchdog.start()
 
     logger.info("Platform Agent API started ✅")
     yield
     _watchdog.stop()
     _redis_bus.close()
-    db_conn.close()
+    close_pool()
 
 
 app = FastAPI(
