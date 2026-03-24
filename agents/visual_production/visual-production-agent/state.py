@@ -1,6 +1,5 @@
 from typing import TypedDict, Optional
 from datetime import datetime
-from models import AssetManifest, GeneratedAsset, AssetType
 
 
 class VisualState(TypedDict):

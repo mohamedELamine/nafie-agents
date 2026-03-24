@@ -1,7 +1,4 @@
-from typing import TypedDict, list
-from datetime import datetime
-from models import RetrievalResult, SupportAnswer
-from typing import Literal
+from typing import list
 
 
 class ThemeDocRetriever:

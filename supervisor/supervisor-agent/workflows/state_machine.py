@@ -1,10 +1,7 @@
 import logging
 from typing import Optional
 from datetime import datetime
-import uuid
-from models import WorkflowInstance, WorkflowStatus, WorkflowStep, EventEnvelope, WorkflowType
-from policy_engine import evaluate_policies, check_user_locked
-from agent_registry import get_agent, get_degraded_action
+from models import WorkflowInstance, WorkflowStatus
 from db.audit_store import audit_store
 from db.workflow_store import workflow_store
 
@@ -61,7 +58,7 @@ def transition_workflow(
 
         return instance
 
-    except ValueError as e:
+    except ValueError:
         raise
     except Exception as e:
         logger.error(f"Error transitioning workflow: {e}")

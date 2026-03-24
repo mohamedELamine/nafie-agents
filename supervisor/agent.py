@@ -1,5 +1,7 @@
 """Entry point wrapper — supervisor-agent."""
-import sys, os, asyncio
+import sys
+import os
+import asyncio
 
 _AGENT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "supervisor-agent")
 _ROOT_DIR  = os.path.join(_AGENT_DIR, "..", "..")

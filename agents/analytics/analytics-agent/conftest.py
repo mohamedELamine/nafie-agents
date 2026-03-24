@@ -10,7 +10,6 @@ import individual workflow files don't need a live DB or Redis connection.
 import sys
 import os
 import types
-import logging
 from contextlib import contextmanager
 from unittest.mock import MagicMock
 

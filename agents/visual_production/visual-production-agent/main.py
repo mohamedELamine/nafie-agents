@@ -1,6 +1,4 @@
 import asyncio
-import os
-import logging
 from dotenv import load_dotenv
 
 from logging_config import configure_logging, get_logger
@@ -14,7 +12,6 @@ logger = get_logger(__name__)
 
 async def main():
     """Main entry point for visual production agent"""
-    from agents.visual_production.visual_production_agent import visual_agent
 
     logger.info("Visual Production Agent starting...")
 

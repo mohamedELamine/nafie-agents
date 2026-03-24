@@ -3,11 +3,10 @@ Tests for workflows/signal_generator.py
 Focus: pure logic (create_signal, generate_signals_from_patterns) and
 idempotency guard (signal_sent_recently checked before send).
 """
-import pytest
 from datetime import datetime
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
-from analytics_agent.models import SignalType, SignalPriority, AttributionConfidence
+from analytics_agent.models import SignalType, SignalPriority
 from analytics_agent.workflows.signal_generator import create_signal, generate_signals_from_patterns
 
 

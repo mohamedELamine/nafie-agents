@@ -1,8 +1,6 @@
 import logging
 import os
-import asyncio
 from typing import Dict, Any
-import json
 
 logger = logging.getLogger("visual_production.visual_listener")
 

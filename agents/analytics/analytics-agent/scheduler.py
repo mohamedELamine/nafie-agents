@@ -1,11 +1,9 @@
 import asyncio
 import os
-import signal
 import sys
 from datetime import datetime, timedelta
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.cron import CronTrigger
 
 from ..logging_config import configure_logging, get_logger
 from .db.connection import close_pool, init_pool, is_pool_initialized
@@ -13,7 +11,6 @@ from .workflows.immediate_evaluator import ImmediateEvaluator
 from .workflows.metrics_engine import (
     metrics_engine_batch,
     daily_aggregation,
-    weekly_aggregation,
 )
 from .workflows.pattern_analyzer import run_pattern_analysis
 from .workflows.signal_generator import generate_signals_from_patterns

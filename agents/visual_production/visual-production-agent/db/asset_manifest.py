@@ -4,10 +4,8 @@ All writes use ON CONFLICT DO NOTHING (Constitutional Law III).
 """
 import json
 import logging
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from .connection import get_conn
 
 logger = logging.getLogger("visual_production.db.asset_manifest")
 

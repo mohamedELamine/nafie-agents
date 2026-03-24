@@ -1,7 +1,6 @@
 from datetime import datetime
 from typing import Any, Dict, List
 
-from ..models import ContentSnapshot
 from ..services.redis_bus import RedisBus
 from ..state import (
     MarketingState,

@@ -2,9 +2,8 @@
 Tests for workflows/event_collector.py — event_collector_node()
 All DB interactions are mocked via patch on get_conn and db functions.
 """
-import pytest
 from datetime import datetime
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────

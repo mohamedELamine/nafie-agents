@@ -1,9 +1,7 @@
-from datetime import datetime
 from typing import Any, Dict
 
 from ..db import marketing_calendar
 from ..db.connection import get_conn
-from ..services import facebook_client, instagram_client, tiktok_client, whatsapp_client
 from ..logging_config import get_logger
 
 logger = get_logger("nodes.platform_publisher")

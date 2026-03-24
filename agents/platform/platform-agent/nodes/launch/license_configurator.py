@@ -8,7 +8,7 @@ import logging
 from db.idempotency import check_completed, mark_completed, mark_started
 from db.registry import ProductRegistry
 from services.ls_client import PRICING
-from state import LaunchState, PlatformStatus
+from state import LaunchState
 
 logger = logging.getLogger("platform_agent.nodes.launch.license_configurator")
 NODE_NAME = "LICENSE_CONFIGURATOR"

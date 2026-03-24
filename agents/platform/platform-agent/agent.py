@@ -7,7 +7,6 @@ Platform Agent — Graph Assembly (T053 + T064)
 """
 from __future__ import annotations
 import logging
-import os
 from langgraph.graph import END, StateGraph
 
 from db.connection import init_pool, get_conn
@@ -177,6 +176,8 @@ if __name__ == "__main__":
     from listeners.update_listener import UpdateListener
     t1 = threading.Thread(target=LaunchListener().run, daemon=True)
     t2 = threading.Thread(target=UpdateListener().run, daemon=True)
-    t1.start(); t2.start()
+    t1.start()
+    t2.start()
     logger.info("Platform Agent running — waiting for events...")
-    t1.join(); t2.join()
+    t1.join()
+    t2.join()

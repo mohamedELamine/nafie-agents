@@ -7,14 +7,12 @@ run_marketing_pipeline() executes the graph against a MarketingState.
 import asyncio
 import os
 import sys
-from datetime import datetime
 from typing import Any, Dict
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 from core.base_agent import BaseAgent
 from core.state import AgentName, BusinessEvent, EventType
 
-from .db.connection import get_conn
 from .logging_config import get_logger
 from .nodes.analytics_consumer import make_analytics_consumer_node
 from .nodes.asset_collector import make_asset_collector_node

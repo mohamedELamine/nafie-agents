@@ -1,14 +1,12 @@
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from ..db import pattern_store
-from ..db import signal_store
 from ..db import event_store
 from ..db import attribution_store
 from ..db.connection import get_conn
 from ..logging_config import get_logger
-from ..metric_definitions import IMMEDIATE_THRESHOLDS
-from ..models import Pattern, SignalType, SignalPriority
+from ..models import Pattern
 
 logger = get_logger("workflows.pattern_analyzer")
 

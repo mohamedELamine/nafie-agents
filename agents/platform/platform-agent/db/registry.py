@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import logging
 from contextlib import AbstractContextManager
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
 import psycopg2

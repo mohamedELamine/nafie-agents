@@ -2,8 +2,7 @@
 Tests for nodes/knowledge_retriever.py — make_knowledge_retriever_node()
 Uses a mock qdrant_client — no real DB / network calls.
 """
-import pytest
-from unittest.mock import MagicMock, call
+from unittest.mock import MagicMock
 from support_agent.nodes.knowledge_retriever import make_knowledge_retriever_node, _build_support_answer
 
 

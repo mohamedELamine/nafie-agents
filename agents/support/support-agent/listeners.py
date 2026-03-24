@@ -1,10 +1,6 @@
-from typing import TypedDict
 from datetime import datetime
 from api import FastAPI
 from fastapi import WebSocket, WebSocketDisconnect, HTTPException
-from nodes import SupportGraph, should_escalate
-from typing import Optional
-import json
 
 
 class WebSocketManager:
@@ -60,7 +56,7 @@ class TicketListener:
         status = ticket_data.get("status")
 
         self.redis.publish_message(
-            f"phone:outgoing", {"id": ticket_id, "status": status, "answer": answer}
+            "phone:outgoing", {"id": ticket_id, "status": status, "answer": answer}
         )
 
         await self.websocket.broadcast(

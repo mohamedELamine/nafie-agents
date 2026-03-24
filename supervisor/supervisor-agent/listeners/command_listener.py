@@ -44,7 +44,6 @@ class CommandListener:
     async def _consume_commands(self):
         """Consume commands from Redis"""
         try:
-            from workflow_definitions import WorkflowType
 
             message = await redis_bus.read_group(
                 channel="workflow_commands", group="supervisor", consumer="command_listener"
@@ -68,7 +67,6 @@ class CommandListener:
     async def _process_command(self, message: dict):
         """Process incoming command"""
         try:
-            from models import EventEnvelope
 
             event_type = message["data"].get("event_type", "")
             event_data = message["data"].get("data", {})
@@ -185,8 +183,6 @@ class CommandListener:
         """Handle policy update command"""
         try:
             from db.policy_store import policy_store
-            from datetime import datetime
-            import uuid
 
             policy_id = data.get("policy_id")
             policy_data = data.get("policy_data", {})

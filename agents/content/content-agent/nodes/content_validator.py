@@ -11,7 +11,6 @@ from typing import List, Tuple
 from state import ContentState
 from models import (
     BRAND_CONSTITUTION_FORBIDDEN_PATTERNS,
-    FACTUAL_CHECK_FALLBACK_POLICY,
     ContentPiece, ContentPlan, ContentStatus, ContentType, FactSheet,
     calculate_english_ratio, count_words, detect_unverified_statistics,
     detect_tone_drift, validate_terminology,

@@ -4,7 +4,7 @@ import logging
 from db.idempotency import check_completed, mark_completed, mark_started
 from db.registry import ProductRegistry
 from services.resend_client import ResendClient
-from state import UpdateState, PlatformStatus
+from state import UpdateState
 
 logger = logging.getLogger("platform_agent.nodes.update.notification_sender")
 NODE_NAME = "NOTIFICATION_SENDER"

@@ -1,18 +1,15 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-import logging
 from datetime import datetime
 from typing import Optional
-import json
 
 from logging_config import configure_logging, get_logger
-from models import WorkflowStatus, WorkflowType
+from models import WorkflowStatus
 from db.workflow_store import workflow_store
 from db.audit_store import audit_store
 from db.health_store import health_store
 from db.policy_store import policy_store
 from db.conflict_store import conflict_store
-from agent_registry import AGENT_REGISTRY
 from workflows.orchestrator import orchestrator
 
 configure_logging()
@@ -188,7 +185,7 @@ async def get_audit_log(category: Optional[str] = None, since: Optional[str] = N
         if since:
             try:
                 since_dt = datetime.fromisoformat(since)
-            except:
+            except Exception:
                 pass
 
         # Get audit log

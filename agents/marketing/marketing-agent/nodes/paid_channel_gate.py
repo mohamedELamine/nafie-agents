@@ -1,5 +1,3 @@
-import resend
-from datetime import datetime
 from typing import Any, Dict
 
 from ..logging_config import get_logger

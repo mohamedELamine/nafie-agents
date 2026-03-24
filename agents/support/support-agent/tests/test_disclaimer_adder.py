@@ -2,7 +2,6 @@
 Tests for nodes/disclaimer_adder.py — make_disclaimer_adder_node()
 Pure function: no external dependencies, no DB, no clients.
 """
-import pytest
 from support_agent.nodes.disclaimer_adder import make_disclaimer_adder_node
 
 _DISCLAIMER_FRAGMENT = "ملاحظة هامة"

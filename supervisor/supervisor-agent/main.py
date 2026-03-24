@@ -1,6 +1,5 @@
 import asyncio
 import os
-import logging
 from dotenv import load_dotenv
 
 from logging_config import configure_logging, get_logger

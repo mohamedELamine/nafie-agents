@@ -2,7 +2,10 @@
 Entry point wrapper — marketing-agent.
 يُستخدم من docker-compose: python -m agents.marketing.agent
 """
-import sys, os, asyncio, types
+import sys
+import os
+import asyncio
+import types
 
 _AGENT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "marketing-agent")
 _ROOT_DIR  = os.path.join(_AGENT_DIR, "..", "..", "..")

@@ -15,7 +15,6 @@ Pipeline order:
   10. batch_recorder      — save batch log + manifest
   11. manifest_builder    — build final JSON + publish THEME_ASSETS_READY
 """
-import logging
 import os
 from typing import Any, Dict
 

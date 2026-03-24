@@ -3,7 +3,7 @@ import os
 from typing import Optional
 from datetime import datetime
 import uuid
-from models import SupervisorAuditLog, AuditCategory, EventEnvelope
+from models import SupervisorAuditLog, AuditCategory
 from db.connection import coerce_datetime, ensure_connection
 
 logger = logging.getLogger("supervisor.audit_store")
@@ -114,7 +114,6 @@ class AuditStore:
 
     def _row_to_audit(self, row) -> SupervisorAuditLog:
         """Convert database row to SupervisorAuditLog"""
-        from datetime import datetime
 
         return SupervisorAuditLog(
             log_id=row[0],

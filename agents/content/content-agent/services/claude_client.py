@@ -13,20 +13,15 @@ from typing import Dict, List, Optional
 import anthropic
 
 from models import (
-    BRAND_CONSTITUTION_FORBIDDEN_PATTERNS,
-    CONTENT_TYPE_SPECS,
     FACTUAL_CHECK_FALLBACK_POLICY,
-    TERMINOLOGY_GLOSSARY,
     ContentCategory,
     ContentPiece,
     ContentPlan,
     ContentRequest,
     ContentStatus,
     ContentTemplate,
-    ContentType,
     FactSheet,
     count_words,
-    parse_word_budget,
 )
 
 logger = logging.getLogger("content_agent.services.claude_client")
@@ -160,7 +155,6 @@ class ClaudeContentClient:
         template:  Optional[ContentTemplate] = None,
     ) -> ContentPiece:
         """يُنتج مخرجاً واحداً."""
-        from models import build_versioning_metadata_dict
         import uuid
         from datetime import datetime
 
@@ -205,7 +199,6 @@ class ClaudeContentClient:
     ) -> List[ContentPiece]:
         """يُنتج متغيرات متعددة — لـ MARKETING_COPY و SOCIAL_CAPTION."""
         import uuid
-        from datetime import datetime
 
         system_prompt = self._build_system_prompt(plan, fact_sheet)
         base_prompt   = self._build_generation_prompt(request, plan, template)
@@ -389,5 +382,5 @@ def _build_versioning_dict(plan: ContentPlan) -> Dict:
 
 def _extract_title(body: str) -> Optional[str]:
     """يستخرج السطر الأول كعنوان."""
-    lines = [l.strip() for l in body.split("\n") if l.strip()]
+    lines = [ln.strip() for ln in body.split("\n") if ln.strip()]
     return lines[0] if lines else None

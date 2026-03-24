@@ -2,7 +2,6 @@ import logging
 import os
 from typing import Optional
 from datetime import datetime
-import uuid
 from models import PolicyRule
 from db.connection import coerce_datetime, ensure_connection
 
@@ -123,7 +122,6 @@ class PolicyStore:
 
     def _row_to_policy(self, row) -> PolicyRule:
         """Convert database row to PolicyRule"""
-        from datetime import datetime
 
         return PolicyRule(
             policy_id=row[0],

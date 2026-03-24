@@ -8,11 +8,10 @@ from qdrant_client import QdrantClient
 from helpscout_client import HelpScoutClient
 from claude_client import ClaudeClient
 from redis_bus import RedisBus
-from helpscout_client import HelpScoutClient
 from db import DB
 from resend_client import ResendClient
 from state import create_initial_state
-from nodes import SupportGraph, should_escalate
+from nodes import SupportGraph
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"

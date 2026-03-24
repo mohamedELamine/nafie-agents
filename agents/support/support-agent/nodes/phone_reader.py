@@ -1,6 +1,4 @@
-from typing import TypedDict
 from datetime import datetime
-from models import SupportTicket, SupportAnswer
 
 
 class PhoneReaderNode:

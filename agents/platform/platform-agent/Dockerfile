@@ -14,6 +14,7 @@ WORKDIR /app
 
 # تثبيت التبعيات النظامية اللازمة لـ psycopg2
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
     libpq-dev \
     gcc \
     && rm -rf /var/lib/apt/lists/*

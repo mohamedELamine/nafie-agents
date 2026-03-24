@@ -3,7 +3,6 @@ import sys
 from datetime import datetime
 from typing import Any, Dict
 
-import redis
 from redis.exceptions import RedisError
 
 from .services.redis_bus import RedisBus
@@ -57,6 +56,6 @@ class RedisLogHandler(logging.Handler):
                 log_data["exception"] = self.format(record)
 
             self.redis_bus.publish(self.channel, log_data)
-        except (RedisError, Exception) as e:
+        except (RedisError, Exception):
             # Don't let Redis issues break the logging
             pass

@@ -1,7 +1,7 @@
 import logging
 from io import BytesIO
 from PIL import Image
-from typing import Tuple, Optional
+from typing import Optional
 
 logger = logging.getLogger("visual_production.image_processor")
 

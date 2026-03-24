@@ -1,8 +1,7 @@
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 from ..db import metric_store
-from ..db import signal_store
 from ..db import report_store
 from ..db import event_store
 from ..db import pattern_store

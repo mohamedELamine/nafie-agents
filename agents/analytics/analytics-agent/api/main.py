@@ -10,7 +10,6 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import JSONResponse
 
 # Ensure the agent root is on sys.path so absolute imports work
 # when launched via `uvicorn api.main:app`.
@@ -27,7 +26,6 @@ from db import (
 )
 from db.connection import close_pool, get_conn, init_pool
 from logging_config import configure_logging, get_logger
-from metric_definitions import get_all_metric_keys
 from models import SignalOutcome
 from scheduler import start_scheduler
 from workflows.event_collector import start_event_collector

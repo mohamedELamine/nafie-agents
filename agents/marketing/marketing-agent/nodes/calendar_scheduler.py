@@ -4,7 +4,7 @@ from typing import Any, Dict
 from ..db import marketing_calendar
 from ..db.connection import get_conn
 from ..logging_config import get_logger
-from ..state import MarketingState, make_initial_state
+from ..state import MarketingState
 
 logger = get_logger("nodes.calendar_scheduler")
 

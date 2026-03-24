@@ -1,5 +1,8 @@
 """Entry point wrapper — support-agent."""
-import sys, os, asyncio, types
+import sys
+import os
+import asyncio
+import types
 
 _AGENT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "support-agent")
 _ROOT_DIR  = os.path.join(_AGENT_DIR, "..", "..", "..")

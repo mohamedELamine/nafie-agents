@@ -5,7 +5,7 @@ on:
   pull_request:
 
 jobs:
-  smoke:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -16,8 +16,92 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install lint dependencies
+        run: pip install ruff
+
       - name: Compile sources
         run: python -m compileall -q core agents supervisor
+
+      - name: Run Ruff
+        run: |
+          ruff check core agents supervisor \
+            --select E,F,W \
+            --ignore E501,E402,F821,W291,W293,F841 \
+            --per-file-ignores "__init__.py:F401"
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: pip install -r requirements.txt pytest psycopg2-binary pydantic-settings
+
+      - name: Run analytics and support tests
+        shell: bash
+        run: |
+          set +e
+
+          cd "$GITHUB_WORKSPACE/agents/analytics/analytics-agent"
+          python -m pytest tests/ -q > "$RUNNER_TEMP/analytics-tests.txt" 2>&1
+          analytics_status=$?
+          cat "$RUNNER_TEMP/analytics-tests.txt"
+
+          cd "$GITHUB_WORKSPACE/agents/support/support-agent"
+          python -m pytest tests/ -q > "$RUNNER_TEMP/support-tests.txt" 2>&1
+          support_status=$?
+          cat "$RUNNER_TEMP/support-tests.txt"
+
+          echo "$analytics_status" > "$RUNNER_TEMP/analytics-status.txt"
+          echo "$support_status" > "$RUNNER_TEMP/support-status.txt"
+
+          if [ "$analytics_status" -ne 0 ] || [ "$support_status" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Publish combined summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Unit Test Summary"
+            echo
+            echo "### Analytics"
+            if [ -f "$RUNNER_TEMP/analytics-tests.txt" ]; then
+              cat "$RUNNER_TEMP/analytics-tests.txt"
+            else
+              echo "Analytics tests did not run."
+            fi
+            echo
+            echo "### Support"
+            if [ -f "$RUNNER_TEMP/support-tests.txt" ]; then
+              cat "$RUNNER_TEMP/support-tests.txt"
+            else
+              echo "Support tests did not run."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  smoke-tests:
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install runtime dependencies
+        run: pip install -r requirements.txt psycopg2-binary pydantic-settings
 
       - name: Run smoke tests
         run: python scripts/run_smoke_tests.py

@@ -1,14 +1,12 @@
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from core.contracts import EVENT_ANALYTICS_SIGNAL, STREAM_ANALYTICS_SIGNALS
-from ..db import pattern_store
 from ..db import signal_store
-from ..db import report_store
 from ..db.connection import get_conn
 from ..logging_config import get_logger
-from ..models import SignalType, SignalPriority, AttributionConfidence
+from ..models import SignalType, SignalPriority
 from ..services.redis_bus import get_redis_bus
 from ..services.resend_client import send_owner_critical_alert as _resend_alert
 

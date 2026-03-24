@@ -10,12 +10,8 @@ from models import (
     WorkflowInstance,
     WorkflowType,
     EventEnvelope,
-    ConflictRecord,
-    ConflictType,
-    AgentHealthRecord,
-    AgentHealthStatus,
 )
-from agent_registry import get_agent, get_degraded_action
+from agent_registry import get_agent
 from db.workflow_store import workflow_store
 from db.audit_store import audit_store
 from db.conflict_store import conflict_store
@@ -159,7 +155,7 @@ class WorkflowOrchestrator:
 
             return instance
 
-        except ValueError as e:
+        except ValueError:
             raise
         except Exception as e:
             logger.error(f"Error starting workflow: {e}")

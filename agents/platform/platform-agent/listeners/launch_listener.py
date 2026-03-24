@@ -14,7 +14,7 @@ from core.contracts import (
     STREAM_THEME_EVENTS,
 )
 from agent import build_launch_graph
-from services.redis_bus import RedisBus, CONSUMER_GROUP
+from services.redis_bus import RedisBus
 from state import PlatformStatus
 
 logger = logging.getLogger("platform_agent.listeners.launch")

@@ -7,7 +7,6 @@ Law V: analytics-agent is read-only — sends signals only, does not execute act
 import asyncio
 import os
 import sys
-from typing import Any, Dict
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 from core.base_agent import BaseAgent
@@ -15,7 +14,6 @@ from core.state import AgentName, BusinessEvent, EventType
 
 from .db.connection import close_pool, init_pool, is_pool_initialized
 from .logging_config import get_logger
-from .workflows.signal_generator import generate_signals_from_patterns
 from .workflows.immediate_evaluator import ImmediateEvaluator
 
 logger = get_logger("agent")

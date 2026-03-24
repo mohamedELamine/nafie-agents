@@ -1,8 +1,8 @@
 from datetime import datetime
 from typing import Any, Dict
 
-from ..models import ContentSnapshot, AssetSnapshot
-from ..state import MarketingState, update_state_with_content, update_state_with_assets
+from ..models import AssetSnapshot
+from ..state import MarketingState, update_state_with_assets
 from ..logging_config import get_logger
 
 logger = get_logger("nodes.asset_collector")

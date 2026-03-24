@@ -1,6 +1,5 @@
 import resend
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from ..logging_config import get_logger
 

@@ -6,7 +6,6 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from .connection import get_conn
 
 logger = logging.getLogger("visual_production.db.batch_log")
 

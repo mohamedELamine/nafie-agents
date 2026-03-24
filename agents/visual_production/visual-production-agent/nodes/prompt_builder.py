@@ -1,6 +1,6 @@
 import logging
 from typing import Dict, Any, List
-from ..models import AssetType, PromptBundle
+from ..models import AssetType
 
 logger = logging.getLogger("visual_production.prompt_builder")
 

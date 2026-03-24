@@ -2,10 +2,9 @@ import logging
 from typing import Optional, Dict, Any
 from datetime import datetime
 import uuid
-from models import ConflictType, ConflictRecord, SupervisorAuditLog, AuditCategory
+from models import ConflictType, ConflictRecord, AuditCategory
 from db.conflict_store import conflict_store
 from db.audit_store import audit_store
-from redis_bus import redis_bus
 
 logger = logging.getLogger("supervisor.conflict_resolver")
 

@@ -140,7 +140,6 @@ class SystemListener:
     async def _handle_conflict_resolution(self, conflict: dict):
         """Handle conflict resolution"""
         try:
-            from db.audit_store import audit_store
 
             # Try to resolve by rules
             resolution = conflict_resolver.resolve_by_rules(conflict)

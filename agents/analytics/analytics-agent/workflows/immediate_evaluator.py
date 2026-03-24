@@ -256,7 +256,6 @@ def _emit_signal(
     يُنشئ الإشارة، يُخزّنها، ويُرسلها على القناة الصحيحة.
     يقبل conn اختيارياً — يفتح واحداً جديداً إن لم يُعطَ.
     """
-    import json, os
     from ..services.redis_bus import get_redis_bus
 
     signal_id = str(uuid.uuid4())

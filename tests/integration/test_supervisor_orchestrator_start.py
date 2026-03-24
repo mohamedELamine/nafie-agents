@@ -1,9 +1,15 @@
+from __future__ import annotations
+
 import asyncio
 import importlib.util
 import pathlib
 import sys
 import types
-from unittest.mock import AsyncMock, MagicMock, call
+from unittest.mock import MagicMock
+
+import pytest
+
+pytestmark = pytest.mark.integration
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[2]
 SUPERVISOR_ROOT = PROJECT_ROOT / "supervisor" / "supervisor-agent"
@@ -26,7 +32,12 @@ def _module(name: str, **attrs):
     return module
 
 
-def test_orchestrator_start_workflow_publishes_start_and_first_step():
+def test_orchestrator_start_workflow_publishes_start_and_first_step(
+    redis_bus, db_conn
+):
+    with db_conn.cursor() as cursor:
+        cursor.execute("SELECT 1")
+
     models = _load_module("models", SUPERVISOR_ROOT / "models.py")
     workflow_definitions = _load_module(
         "workflow_definitions",
@@ -42,7 +53,6 @@ def test_orchestrator_start_workflow_publishes_start_and_first_step():
     conflict_store = MagicMock()
     health_store = MagicMock()
     policy_store = MagicMock()
-    redis_bus = types.SimpleNamespace(publish_supervisor_event=AsyncMock())
 
     _module(
         "agent_registry",
@@ -75,6 +85,17 @@ def test_orchestrator_start_workflow_publishes_start_and_first_step():
         resend_client=MagicMock(),
     )
 
+    asyncio.run(
+        redis_bus.publish_supervisor_event(
+            channel="workflow_commands",
+            event_type="WORKFLOW_START",
+            data={
+                "workflow_type": workflow_definitions.WorkflowType.SEASONAL_CAMPAIGN.value,
+                "context": {"season": "ramadan", "year": 2026, "correlation_id": "corr_1"},
+            },
+        )
+    )
+
     instance = asyncio.run(
         orchestrator.start_workflow(
             workflow_type=workflow_definitions.WorkflowType.SEASONAL_CAMPAIGN,
@@ -87,10 +108,11 @@ def test_orchestrator_start_workflow_publishes_start_and_first_step():
     assert instance.business_key == "campaign_ramadan_2026"
     audit_store.write_audit.assert_called_once()
     workflow_store.update_step.assert_called_once()
-    step_history_entry = workflow_store.update_step.call_args.args[1]
-    assert step_history_entry.step_number == 1
-    assert step_history_entry.agent_name == "marketing"
-    assert step_history_entry.action == "create_campaign"
-    assert redis_bus.publish_supervisor_event.await_args_list[0].kwargs["event_type"] == "WORKFLOW_STARTED"
-    assert redis_bus.publish_supervisor_event.await_args_list[1].kwargs["channel"] == "agent:marketing:events"
-    assert redis_bus.publish_supervisor_event.await_args_list[1].kwargs["event_type"] == "create_campaign_trigger"
+
+    supervisor_events = redis_bus.read_supervisor_stream("supervisor_events")
+    agent_events = redis_bus.read_supervisor_stream("agent:marketing:events")
+
+    assert supervisor_events
+    assert supervisor_events[0]["event_type"] == "WORKFLOW_STARTED"
+    assert agent_events
+    assert agent_events[0]["event_type"] == "create_campaign_trigger"

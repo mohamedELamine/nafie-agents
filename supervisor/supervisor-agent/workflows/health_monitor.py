@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from datetime import datetime
 from models import AgentHealthStatus, AgentHealthRecord
 from db.health_store import health_store

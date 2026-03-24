@@ -2,9 +2,7 @@ import logging
 import os
 from typing import Optional
 from datetime import datetime
-import uuid
-from models import WorkflowInstance, WorkflowStatus, WorkflowStep, WorkflowType, SupervisorAuditLog
-from policy_engine import evaluate_policies, check_user_locked
+from models import WorkflowInstance, WorkflowStatus, WorkflowStep, WorkflowType
 from db.connection import coerce_datetime, ensure_connection
 
 logger = logging.getLogger("supervisor.workflow_store")
@@ -190,7 +188,6 @@ class WorkflowStore:
 
     def _row_to_instance(self, row) -> WorkflowInstance:
         """Convert database row to WorkflowInstance"""
-        from datetime import datetime
 
         return WorkflowInstance(
             instance_id=row[0],

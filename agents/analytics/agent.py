@@ -2,7 +2,10 @@
 Entry point wrapper — analytics-agent.
 يُستخدم من docker-compose: python -m agents.analytics.agent
 """
-import sys, os, asyncio, types
+import sys
+import os
+import asyncio
+import types
 
 _AGENT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "analytics-agent")
 _ROOT_DIR  = os.path.join(_AGENT_DIR, "..", "..", "..")

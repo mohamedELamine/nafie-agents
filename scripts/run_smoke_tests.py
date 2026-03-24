@@ -21,11 +21,6 @@ TEST_FILES = [
     ROOT / "agents/visual_production/visual-production-agent/tests/test_review_decision.py",
     ROOT / "supervisor/supervisor-agent/tests/test_listener_runtime.py",
     ROOT / "supervisor/supervisor-agent/tests/test_db_lazy_store.py",
-    ROOT / "tests/integration/test_content_to_marketing_flow.py",
-    ROOT / "tests/integration/test_assets_and_analytics_to_marketing_flow.py",
-    ROOT / "tests/integration/test_platform_to_content_flow.py",
-    ROOT / "tests/integration/test_supervisor_workflow_start.py",
-    ROOT / "tests/integration/test_supervisor_orchestrator_start.py",
 ]
 
 

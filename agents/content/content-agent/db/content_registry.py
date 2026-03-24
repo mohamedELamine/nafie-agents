@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 import psycopg2.extras
 
@@ -215,7 +215,7 @@ def _extract_canonical_phrases(
     phrases: Dict[str, str] = {}
 
     # استخراج السطر الأول كـ headline
-    lines = [l.strip() for l in body.split("\n") if l.strip()]
+    lines = [ln.strip() for ln in body.split("\n") if ln.strip()]
     if lines:
         phrases["headline"] = lines[0]
 

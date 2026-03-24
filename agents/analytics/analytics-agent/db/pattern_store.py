@@ -1,8 +1,7 @@
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import psycopg2
-from psycopg2 import sql
 
 from ..logging_config import get_logger
 

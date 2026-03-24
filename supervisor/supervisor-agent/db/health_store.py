@@ -2,7 +2,6 @@ import logging
 import os
 from typing import Optional
 from datetime import datetime
-import uuid
 from models import AgentHealthRecord, AgentHealthStatus
 from db.connection import coerce_datetime, ensure_connection
 
@@ -122,7 +121,6 @@ class HealthStore:
 
     def _row_to_health(self, row) -> AgentHealthRecord:
         """Convert database row to AgentHealthRecord"""
-        from datetime import datetime
 
         return AgentHealthRecord(
             agent_name=row[0],

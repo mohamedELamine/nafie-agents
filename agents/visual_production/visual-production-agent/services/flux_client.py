@@ -1,7 +1,6 @@
-import os
 import httpx
 import logging
-from typing import Optional, Tuple
+from typing import Tuple
 from concurrent.futures import ThreadPoolExecutor
 
 logger = logging.getLogger("visual_production.flux_client")

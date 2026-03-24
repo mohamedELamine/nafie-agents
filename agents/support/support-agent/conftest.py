@@ -7,7 +7,6 @@ even though the directory name contains a hyphen.
 import sys
 import os
 import types
-import logging
 from unittest.mock import MagicMock
 
 SA_DIR = os.path.dirname(os.path.abspath(__file__))

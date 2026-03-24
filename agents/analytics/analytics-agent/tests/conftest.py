@@ -4,8 +4,7 @@ Shared fixtures for analytics-agent tests.
 import sys
 import os
 import pytest
-from unittest.mock import MagicMock, patch
-from datetime import datetime, timezone
+from unittest.mock import MagicMock
 
 # Make the analytics-agent package importable
 _AGENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

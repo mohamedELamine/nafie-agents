@@ -1,6 +1,5 @@
 import os
 from datetime import datetime
-from typing import Any, Dict
 
 import psycopg2
 from core.contracts import EVENT_CONTENT_READY, STREAM_CONTENT_EVENTS

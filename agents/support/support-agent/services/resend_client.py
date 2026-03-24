@@ -1,6 +1,5 @@
 import resend
-from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from ..logging_config import get_logger
 
@@ -28,7 +27,7 @@ class ResendClient:
         """Send escalation alert to owner."""
         try:
             email = self.owner_email
-            
+
             subject = f"🔴 صعود تصعيد جديد: {escalation_id}"
             body = f"""
             <h1>escalation</h1>
@@ -38,7 +37,7 @@ class ResendClient:
             <p><strong>customer_identity:</strong> {customer_identity}</p>
             <p><strong>current_agent_context:</strong> {current_agent_context}</p>
             """
-            
+
             for attempt in range(retry):
                 try:
                     response = resend.Emails.send({
@@ -74,7 +73,7 @@ class ResendClient:
         """Send recurring issue alert."""
         try:
             email = self.owner_email
-            
+
             subject = f"⚠️ مشكلة متكررة: {issue_type} ({issue_count} occurrences)"
             body = f"""
             <h1>recurring_issue</h1>
@@ -82,7 +81,7 @@ class ResendClient:
             <p><strong>issue_count:</strong> {issue_count}</p>
             <p><strong>evidence_contract:</strong> {evidence_contract}</p>
             """
-            
+
             for attempt in range(retry):
                 try:
                     response = resend.Emails.send({

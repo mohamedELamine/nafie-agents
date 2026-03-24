@@ -5,6 +5,7 @@ WORKDIR /app
 # تثبيت التبعيات النظامية
 RUN apt-get update && apt-get install -y \
     gcc \
+    curl \
     libpq-dev \
     libmagic1 \
     ffmpeg \

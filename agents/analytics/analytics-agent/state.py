@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel
 
-from .models import AnalyticsEvent, AttributionConfidence, SignalType
+from .models import AnalyticsEvent
 
 
 class AnalyticsState(BaseModel):

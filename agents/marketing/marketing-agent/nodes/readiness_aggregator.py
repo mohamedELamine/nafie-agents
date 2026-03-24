@@ -1,9 +1,8 @@
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from datetime import datetime
+from typing import Any, Dict
 
-from ..db import marketing_calendar
 from ..logging_config import get_logger
-from ..state import MarketingState, make_initial_state
+from ..state import MarketingState
 
 logger = get_logger("nodes.readiness_aggregator")
 
