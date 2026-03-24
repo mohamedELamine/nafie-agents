@@ -1,0 +1,160 @@
+name: Optional E2E Smoke
+
+on:
+  workflow_dispatch:
+
+jobs:
+  e2e-smoke:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: ar_themes
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ar_themes"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/ar_themes
+      VISUAL_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/ar_themes
+      REDIS_URL: redis://127.0.0.1:6379/0
+      QDRANT_URL: http://127.0.0.1:6333
+      OWNER_EMAIL: owner@example.com
+      VISUAL_OWNER_EMAIL: visual@example.com
+      CLAUDE_API_KEY: ""
+      RESEND_API_KEY: ""
+      VISUAL_AUTO_APPROVE_REVIEW: "true"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt pytest
+
+      - name: Run migrations
+        run: psql "$DATABASE_URL" -f scripts/init_db.sql
+
+      - name: Start Qdrant mock
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/e2e-logs"
+          python - <<'PY' > "$RUNNER_TEMP/e2e-logs/qdrant.log" 2>&1 &
+          import http.server
+          import json
+          import socketserver
+
+          class Handler(http.server.BaseHTTPRequestHandler):
+              def do_GET(self):
+                  if self.path == "/healthz":
+                      body = json.dumps({"status": "ok", "service": "qdrant-mock"}).encode()
+                      self.send_response(200)
+                      self.send_header("Content-Type", "application/json")
+                      self.send_header("Content-Length", str(len(body)))
+                      self.end_headers()
+                      self.wfile.write(body)
+                  else:
+                      self.send_response(404)
+                      self.end_headers()
+
+              def log_message(self, format, *args):
+                  return
+
+          with socketserver.TCPServer(("127.0.0.1", 6333), Handler) as httpd:
+              httpd.serve_forever()
+          PY
+          echo $! > "$RUNNER_TEMP/e2e-qdrant.pid"
+          sleep 1
+
+      - name: Start ecosystem agents
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/e2e-logs" "$RUNNER_TEMP/visual-storage"
+
+          env PYTHONUNBUFFERED=1 \
+            PYTHONPATH="$GITHUB_WORKSPACE" \
+            python supervisor/agent.py \
+            > "$RUNNER_TEMP/e2e-logs/supervisor.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/e2e-supervisor.pid"
+
+          env PYTHONUNBUFFERED=1 \
+            PYTHONPATH="$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/agents/content/content-agent" \
+            python - <<'PY' > "$RUNNER_TEMP/e2e-logs/content.log" 2>&1 &
+          from listeners.content_listener import ContentListener
+          ContentListener().start()
+          PY
+          echo $! > "$RUNNER_TEMP/e2e-content.pid"
+
+          env PYTHONUNBUFFERED=1 \
+            STORAGE_PATH="$RUNNER_TEMP/visual-storage" \
+            PYTHONPATH="$GITHUB_WORKSPACE" \
+            python agents/visual_production/agent.py \
+            > "$RUNNER_TEMP/e2e-logs/visual.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/e2e-visual.pid"
+
+          env PYTHONUNBUFFERED=1 \
+            PYTHONPATH="$GITHUB_WORKSPACE" \
+            python agents/marketing/agent.py \
+            > "$RUNNER_TEMP/e2e-logs/marketing.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/e2e-marketing.pid"
+
+          env PYTHONUNBUFFERED=1 \
+            PYTHONPATH="$GITHUB_WORKSPACE" \
+            python agents/analytics/agent.py \
+            > "$RUNNER_TEMP/e2e-logs/analytics.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/e2e-analytics.pid"
+
+          sleep 5
+
+      - name: Run E2E smoke test
+        run: python scripts/e2e_smoke_test.py
+
+      - name: Show agent logs on failure
+        if: failure()
+        shell: bash
+        run: |
+          for log in "$RUNNER_TEMP"/e2e-logs/*.log; do
+            echo "===== $(basename "$log") ====="
+            cat "$log"
+            echo
+          done
+
+      - name: Cleanup background processes
+        if: always()
+        shell: bash
+        run: |
+          for pid_file in \
+            "$RUNNER_TEMP/e2e-qdrant.pid" \
+            "$RUNNER_TEMP/e2e-supervisor.pid" \
+            "$RUNNER_TEMP/e2e-content.pid" \
+            "$RUNNER_TEMP/e2e-visual.pid" \
+            "$RUNNER_TEMP/e2e-marketing.pid" \
+            "$RUNNER_TEMP/e2e-analytics.pid"; do
+            if [ -f "$pid_file" ]; then
+              kill "$(cat "$pid_file")" 2>/dev/null || true
+            fi
+          done
