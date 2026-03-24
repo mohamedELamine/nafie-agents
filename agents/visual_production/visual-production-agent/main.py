@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import sys
+import time
 import types
 import uuid
 from urllib.parse import urlparse
@@ -33,6 +34,8 @@ logger = get_logger(__name__)
 
 CONSUMER_GROUP = "visual-production-agent"
 CONSUMER_NAME = "visual-production-worker-1"
+DEDUP_TTL_SECONDS = 120
+_recent_launches: dict[str, float] = {}
 
 
 def _redis_client() -> redis.Redis:
@@ -65,6 +68,22 @@ def _build_theme_contract(event: dict) -> dict:
     return contract
 
 
+def _dedupe_key(event: dict, theme_contract: dict) -> str:
+    return event.get("correlation_id") or f"{theme_contract['slug']}:{theme_contract['version']}"
+
+
+def _should_skip_launch(event: dict, theme_contract: dict) -> bool:
+    now = time.monotonic()
+    expired = [key for key, seen_at in _recent_launches.items() if now - seen_at > DEDUP_TTL_SECONDS]
+    for key in expired:
+        _recent_launches.pop(key, None)
+    key = _dedupe_key(event, theme_contract)
+    if key in _recent_launches:
+        return True
+    _recent_launches[key] = now
+    return False
+
+
 async def _ensure_group(client: redis.Redis) -> None:
     if not await client.exists(STREAM_PRODUCT_EVENTS):
         await client.xadd(STREAM_PRODUCT_EVENTS, {"init": "true"})
@@ -80,6 +99,9 @@ async def _handle_event(agent, event: dict) -> None:
     if event_type not in {EVENT_THEME_APPROVED, EVENT_NEW_PRODUCT_LIVE}:
         return
     theme_contract = _build_theme_contract(event)
+    if _should_skip_launch(event, theme_contract):
+        logger.info("Skipping duplicate %s for %s", event_type, theme_contract["slug"])
+        return
     batch_id = f"{theme_contract['slug']}_{uuid.uuid4().hex[:8]}"
     result = await run_visual_pipeline(
         agent=agent,
