@@ -13,7 +13,7 @@ import json
 import logging
 import threading
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from agent import run_content_pipeline
@@ -128,7 +128,7 @@ class ContentListener:
                 output_mode       = "variants" if content_type == ContentType.MARKETING_COPY else "single",
                 variant_count     = 3 if content_type == ContentType.MARKETING_COPY else 1,
                 evidence_contract = None,
-                created_at        = datetime.utcnow(),
+                created_at        = datetime.now(timezone.utc),
             )
             # تشغيل متوازٍ
             t = threading.Thread(
@@ -160,7 +160,7 @@ class ContentListener:
             output_mode       = "single",
             variant_count     = 1,
             evidence_contract = None,
-            created_at        = datetime.utcnow(),
+            created_at        = datetime.now(timezone.utc),
         )
         run_content_pipeline(request, **self._services)
         logger.info("content_listener.theme_updated slug=%s", data.get("theme_slug"))
@@ -184,7 +184,7 @@ class ContentListener:
             output_mode       = "single",
             variant_count     = 1,
             evidence_contract = evidence,
-            created_at        = datetime.utcnow(),
+            created_at        = datetime.now(timezone.utc),
         )
         run_content_pipeline(request, **self._services)
         logger.info("content_listener.recurring_issue slug=%s", data.get("theme_slug"))
@@ -216,7 +216,7 @@ class ContentListener:
             output_mode       = data.get("output_mode", "single"),
             variant_count     = data.get("variant_count", 1),
             evidence_contract = parse_evidence_contract(data.get("evidence_contract")),
-            created_at        = datetime.utcnow(),
+            created_at        = datetime.now(timezone.utc),
         )
         run_content_pipeline(request, **self._services)
         logger.info(

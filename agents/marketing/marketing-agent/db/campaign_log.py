@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
 import psycopg2
@@ -24,7 +24,7 @@ def save_log(conn: psycopg2.extensions.connection, log_entry: Dict[str, Any]) ->
                     log_entry["campaign_id"],
                     log_entry["event_type"],
                     str(log_entry["details"]),
-                    log_entry.get("created_at", datetime.utcnow()),
+                    log_entry.get("created_at", datetime.now(timezone.utc)),
                 ),
             )
             conn.commit()
@@ -68,7 +68,7 @@ def get_channel_stats(
     """Get statistics for a campaign by channel."""
     try:
         with conn.cursor() as cursor:
-            cutoff = datetime.utcnow() - timedelta(days=days)
+            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
             cursor.execute(
                 """

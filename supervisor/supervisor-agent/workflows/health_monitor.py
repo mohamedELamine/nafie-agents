@@ -1,6 +1,6 @@
 import logging
 from typing import Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from models import AgentHealthStatus, AgentHealthRecord
 from db.health_store import health_store
 from redis_bus import redis_bus
@@ -25,7 +25,7 @@ class HealthMonitor:
                 health_record = await self._check_agent_health(agent_name)
                 all_health[agent_name] = health_record
 
-            self.last_health_check = datetime.utcnow()
+            self.last_health_check = datetime.now(timezone.utc)
 
             # Check for unhealthy agents
             await self._handle_unhealthy_agents(all_health)
@@ -46,12 +46,12 @@ class HealthMonitor:
             health = AgentHealthRecord(
                 agent_name=agent_name,
                 status=AgentHealthStatus.HEALTHY,
-                last_heartbeat=datetime.utcnow().isoformat(),
+                last_heartbeat=datetime.now(timezone.utc).isoformat(),
                 queue_depth=0,
                 active_jobs=0,
                 error_rate=0.0,
                 mode="normal",
-                last_checked=datetime.utcnow().isoformat(),
+                last_checked=datetime.now(timezone.utc).isoformat(),
                 issues=[],
             )
 
@@ -112,7 +112,7 @@ class HealthMonitor:
                 channel="supervisor_events",
                 event_type="HEALTH_CHECK",
                 data={
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                     "agents": {name: health.status.value for name, health in all_health.items()},
                 },
             )
@@ -128,12 +128,12 @@ class HealthMonitor:
             health = AgentHealthRecord(
                 agent_name=agent_name,
                 status=AgentHealthStatus.HEALTHY,
-                last_heartbeat=datetime.utcnow().isoformat(),
+                last_heartbeat=datetime.now(timezone.utc).isoformat(),
                 queue_depth=heartbeat_data.get("queue_depth", 0),
                 active_jobs=heartbeat_data.get("active_jobs", 0),
                 error_rate=heartbeat_data.get("error_rate", 0.0),
                 mode="normal",
-                last_checked=datetime.utcnow().isoformat(),
+                last_checked=datetime.now(timezone.utc).isoformat(),
                 issues=[],
             )
 
@@ -166,12 +166,12 @@ class HealthMonitor:
             if not health or not health.last_heartbeat:
                 return True
 
-            from datetime import datetime, timedelta
+            from datetime import datetime, timedelta, timezone
 
             last_heartbeat = datetime.fromisoformat(health.last_heartbeat)
             timeout_seconds = 120  # Default from HEARTBEAT_TIMEOUT_SEC
 
-            if datetime.utcnow() - last_heartbeat > timedelta(seconds=timeout_seconds):
+            if datetime.now(timezone.utc) - last_heartbeat > timedelta(seconds=timeout_seconds):
                 logger.error(f"HEARTBEAT_TIMEOUT: {agent_name}")
                 return True
 
@@ -196,7 +196,7 @@ class HealthMonitor:
             healthy_count = total_agents - unhealthy_count
 
             summary = {
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "total_agents": total_agents,
                 "healthy_agents": healthy_count,
                 "unhealthy_agents": unhealthy_count,

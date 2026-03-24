@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 from core.contracts import (
@@ -43,7 +43,7 @@ def make_campaign_recorder_node(redis: RedisBus) -> callable:
 
                     if status == "published":
                         event = {
-                            "log_id":      f"log_{post_id}_published_{int(datetime.utcnow().timestamp())}",
+                            "log_id":      f"log_{post_id}_published_{int(datetime.now(timezone.utc).timestamp())}",
                             "campaign_id": state.current_campaign.campaign_id,
                             "event_type":  "POST_PUBLISHED",
                             "details": {
@@ -53,13 +53,13 @@ def make_campaign_recorder_node(redis: RedisBus) -> callable:
                                 "published_at": (
                                     post["published_at"].isoformat()
                                     if post.get("published_at")
-                                    else datetime.utcnow().isoformat()
+                                    else datetime.now(timezone.utc).isoformat()
                                 ),
                             },
                         }
                     elif status == "failed":
                         event = {
-                            "log_id":      f"log_{post_id}_failed_{int(datetime.utcnow().timestamp())}",
+                            "log_id":      f"log_{post_id}_failed_{int(datetime.now(timezone.utc).timestamp())}",
                             "campaign_id": state.current_campaign.campaign_id,
                             "event_type":  "POST_FAILED",
                             "details": {
@@ -71,7 +71,7 @@ def make_campaign_recorder_node(redis: RedisBus) -> callable:
                         }
                     else:
                         event = {
-                            "log_id":      f"log_{post_id}_scheduled_{int(datetime.utcnow().timestamp())}",
+                            "log_id":      f"log_{post_id}_scheduled_{int(datetime.now(timezone.utc).timestamp())}",
                             "campaign_id": state.current_campaign.campaign_id,
                             "event_type":  "POST_SCHEDULED",
                             "details": {

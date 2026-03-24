@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class TwitterConsumerNode:
@@ -16,7 +16,7 @@ class TwitterConsumerNode:
             "platform": "twitter",
             "body": message.get("text", ""),
             "subject": message.get("text", ""),
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
             "updated": False,
         }
 

@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import redis
@@ -97,7 +97,7 @@ class RedisBus:
         """Create a checkpoint for a campaign."""
         try:
             checkpoint_id = (
-                f"checkpoint_{campaign_id}_{int(datetime.utcnow().timestamp())}"
+                f"checkpoint_{campaign_id}_{int(datetime.now(timezone.utc).timestamp())}"
             )
 
             self.client.setex(
@@ -112,7 +112,7 @@ class RedisBus:
                     "checkpoint_id": checkpoint_id,
                     "campaign_id": campaign_id,
                     "data": checkpoint_data,
-                    "created_at": datetime.utcnow().isoformat(),
+                    "created_at": datetime.now(timezone.utc).isoformat(),
                 },
             )
 

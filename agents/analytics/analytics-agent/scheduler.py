@@ -1,7 +1,7 @@
 import asyncio
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
@@ -145,7 +145,7 @@ class AnalyticsScheduler:
     async def _generate_weekly_report(self) -> None:
         """Generate and send weekly report."""
         try:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             start = now - timedelta(days=7)
             end = now
 
@@ -162,7 +162,7 @@ class AnalyticsScheduler:
     async def _generate_monthly_report(self) -> None:
         """Generate and send monthly report."""
         try:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             month = now.month
             year = now.year
 

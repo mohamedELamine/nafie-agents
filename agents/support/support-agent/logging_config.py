@@ -1,6 +1,6 @@
 import logging
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 from redis.exceptions import RedisError
@@ -43,7 +43,7 @@ class RedisLogHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         try:
             log_data: Dict[str, Any] = {
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "level": record.levelname,
                 "logger": record.name,
                 "message": record.getMessage(),

@@ -1,6 +1,6 @@
 import logging
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 from models import ConflictType, ConflictRecord, AuditCategory
 from db.conflict_store import conflict_store
@@ -29,7 +29,7 @@ class ConflictResolver:
                     agents_involved=agents,
                     description=description,
                     escalated=False,
-                    created_at=datetime.utcnow().isoformat(),
+                    created_at=datetime.now(timezone.utc).isoformat(),
                 )
                 return conflict
 
@@ -41,7 +41,7 @@ class ConflictResolver:
                     agents_involved=["platform", "marketing"],
                     description="Budget allocation conflict detected",
                     escalated=True,
-                    created_at=datetime.utcnow().isoformat(),
+                    created_at=datetime.now(timezone.utc).isoformat(),
                 )
                 return conflict
 
@@ -53,7 +53,7 @@ class ConflictResolver:
                     agents_involved=data.get("agents_involved", []),
                     description=f"Dependency failure: {data.get('reason', 'unknown')}",
                     escalated=False,
-                    created_at=datetime.utcnow().isoformat(),
+                    created_at=datetime.now(timezone.utc).isoformat(),
                 )
                 return conflict
 
@@ -106,7 +106,7 @@ class ConflictResolver:
                             "agents_involved": conflict.agents_involved,
                             "description": conflict.description,
                             "resolution_suggestion": resolution,
-                            "timestamp": datetime.utcnow().isoformat(),
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
                         },
                     )
 

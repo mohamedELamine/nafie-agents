@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 from ..db import save_manifest
@@ -45,7 +45,7 @@ class ReviewGateNode:
             "assets": [],
             "total_cost": 0.0,
             "status": "review_pending",
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
             "notes": "Waiting for human review",
         }
 

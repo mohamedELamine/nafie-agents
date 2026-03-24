@@ -1,7 +1,7 @@
 import logging
 import os
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 from models import SupervisorAuditLog, AuditCategory
 from db.connection import coerce_datetime, ensure_connection
@@ -49,7 +49,7 @@ class AuditStore:
                         correlation_id,
                         str(details) if details else None,
                         outcome,
-                        datetime.utcnow().isoformat(),
+                        datetime.now(timezone.utc).isoformat(),
                     ),
                 )
 

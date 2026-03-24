@@ -8,7 +8,7 @@ Metrics Engine — طبقة ٢
 لا إعادة حساب — تجميع فقط. Idempotency على metric_key + granularity + period_start.
 """
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
 
 from ..db import event_store, metric_store
@@ -25,7 +25,7 @@ def metrics_engine_batch() -> None:
     يُشغَّل كل ساعة — يحسب Hourly metrics للفترة الماضية.
     الفترة = آخر ساعة كاملة (not rolling).
     """
-    now          = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
+    now          = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
     period_start = now - timedelta(hours=1)
     period_end   = now
 
@@ -111,7 +111,7 @@ def daily_aggregation() -> None:
     يُشغَّل يومياً 01:00 — يجمّع hourly → daily.
     لا إعادة حساب — تجميع بالـ SUM من hourly snapshots.
     """
-    yesterday_start = (datetime.utcnow() - timedelta(days=1)).replace(
+    yesterday_start = (datetime.now(timezone.utc) - timedelta(days=1)).replace(
         hour=0, minute=0, second=0, microsecond=0
     )
     yesterday_end = yesterday_start + timedelta(days=1)
@@ -184,7 +184,7 @@ def weekly_aggregation() -> None:
     يُشغَّل أسبوعياً — يجمّع daily → weekly.
     يحسب أسبوع كامل (الاثنين → الأحد).
     """
-    today        = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today        = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     week_end     = today
     week_start   = today - timedelta(days=7)
 

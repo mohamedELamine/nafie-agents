@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import psycopg2
@@ -30,7 +30,7 @@ def save_escalation(
                     escalation["original_message"],
                     str(escalation["customer_identity"]),
                     escalation["current_agent_context"],
-                    datetime.utcnow(),
+                    datetime.now(timezone.utc),
                 ),
             )
             conn.commit()
@@ -48,7 +48,7 @@ def get_escalation_history(
     """Get escalation history."""
     try:
         with conn.cursor() as cursor:
-            cutoff = datetime.utcnow() - timedelta(days=days)
+            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
             if ticket_id:
                 cursor.execute(
@@ -85,7 +85,7 @@ def get_escalations_by_reason(
     """Get escalations by reason."""
     try:
         with conn.cursor() as cursor:
-            cutoff = datetime.utcnow() - timedelta(days=days)
+            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
             cursor.execute(
                 """

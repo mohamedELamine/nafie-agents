@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import psycopg2
@@ -24,7 +24,7 @@ def mark_started(
                 ) VALUES (%s, %s, %s, %s, 'in_progress')
                 ON CONFLICT (execution_id) DO NOTHING
                 """,
-                (execution_id, ticket_id, platform, datetime.utcnow()),
+                (execution_id, ticket_id, platform, datetime.now(timezone.utc)),
             )
             conn.commit()
             logger.debug(f"Marked execution {execution_id} as started")
@@ -50,7 +50,7 @@ def mark_completed(
                 SET status = 'completed', completed_at = %s
                 WHERE execution_id = %s
                 """,
-                (datetime.utcnow(), execution_id),
+                (datetime.now(timezone.utc), execution_id),
             )
             conn.commit()
             logger.debug(f"Marked execution {execution_id} as completed")
@@ -71,7 +71,7 @@ def mark_failed(
                 SET status = 'failed', completed_at = %s, error_message = %s
                 WHERE execution_id = %s
                 """,
-                (datetime.utcnow(), error_message, execution_id),
+                (datetime.now(timezone.utc), error_message, execution_id),
             )
             conn.commit()
             logger.error(f"Marked execution {execution_id} as failed: {error_message}")
@@ -86,7 +86,7 @@ def check_completed(
     """Check if a ticket was already processed recently."""
     try:
         with conn.cursor() as cursor:
-            cutoff = datetime.utcnow() - timedelta(hours=hours)
+            cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
 
             cursor.execute(
                 """

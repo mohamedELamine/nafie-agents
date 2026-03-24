@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
 
 from ..db import marketing_calendar
@@ -33,7 +33,7 @@ def make_calendar_scheduler_node(redis) -> callable:
                 formats = ["feed_image"]
 
             # Use best time if available, otherwise current time + 1 hour
-            scheduled_time = best_time if best_time else datetime.utcnow() + timedelta(hours=1)
+            scheduled_time = best_time if best_time else datetime.now(timezone.utc) + timedelta(hours=1)
 
             scheduled_posts = []
             variant_count   = 1

@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import psycopg2
@@ -38,7 +38,7 @@ def save_outcome(conn: psycopg2.extensions.connection, outcome) -> None:
                     data.get("after_value"),
                     data.get("outcome_window_days", 7),
                     data.get("success_score"),
-                    data.get("evaluated_at") or datetime.utcnow(),
+                    data.get("evaluated_at") or datetime.now(timezone.utc),
                     data.get("notes"),
                 ),
             )
@@ -100,7 +100,7 @@ def get_signal_outcome_summary(
     """Get summary of signal outcomes."""
     try:
         with conn.cursor() as cursor:
-            cutoff = datetime.utcnow() - timedelta(days=days)
+            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
             cursor.execute(
                 """

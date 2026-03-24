@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 import psycopg2
@@ -28,7 +28,7 @@ def save_report(conn: psycopg2.extensions.connection, report: Dict[str, Any]) ->
                     report["total_revenue"],
                     str(report["highlights"]),
                     str(report["concerns"]),
-                    datetime.utcnow(),
+                    datetime.now(timezone.utc),
                 ),
             )
             conn.commit()

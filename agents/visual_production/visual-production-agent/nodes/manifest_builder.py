@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any
 
 from core.contracts import EVENT_THEME_ASSETS_READY, STREAM_ASSET_EVENTS
@@ -26,7 +26,7 @@ class ManifestBuilderNode:
             "assets": [],
             "total_cost": 0.0,
             "status": "published",
-            "published_at": datetime.utcnow().isoformat(),
+            "published_at": datetime.now(timezone.utc).isoformat(),
         }
 
         if published_assets:

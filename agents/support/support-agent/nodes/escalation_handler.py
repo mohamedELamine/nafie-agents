@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 from .. import db
@@ -23,7 +23,7 @@ def make_escalation_handler_node(helpscout_client, resend_client, redis_bus) -> 
 
             ticket_id = ticket.get("ticket_id", "unknown")
             escalation = {
-                "escalation_id": f"esc_{ticket_id}_{int(datetime.utcnow().timestamp())}",
+                "escalation_id": f"esc_{ticket_id}_{int(datetime.now(timezone.utc).timestamp())}",
                 "ticket_id": ticket_id,
                 "ticket_platform": ticket.get("platform", "helpscout"),
                 "escalation_reason": overall_level,
@@ -34,7 +34,7 @@ def make_escalation_handler_node(helpscout_client, resend_client, redis_bus) -> 
                     "order_id": ticket.get("order_id"),
                 },
                 "current_agent_context": f"risk_flags={risk_flags}",
-                "escalation_time": datetime.utcnow(),
+                "escalation_time": datetime.now(timezone.utc),
             }
 
             with get_conn() as conn:

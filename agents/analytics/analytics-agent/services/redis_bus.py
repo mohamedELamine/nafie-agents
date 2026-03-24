@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import redis
@@ -149,7 +149,7 @@ class RedisBus:
             "theme_slug": theme_slug,
             "raw_data": raw_data,
             "occurred_at": occurred_at.isoformat(),
-            "received_at": datetime.utcnow().isoformat(),
+            "received_at": datetime.now(timezone.utc).isoformat(),
         }
 
 

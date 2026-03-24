@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from ..db import event_store
 from ..db.connection import get_conn
@@ -15,14 +15,14 @@ def reconcile_sales_data() -> None:
         ls_client = LemonSqueezyClient(api_key=__import__("os").getenv("LS_API_KEY", ""))
 
         # Get orders from Lemon Squeezy for the last 7 days
-        ls_orders = ls_client.get_orders(since=datetime.utcnow() - timedelta(days=7))
+        ls_orders = ls_client.get_orders(since=datetime.now(timezone.utc) - timedelta(days=7))
 
         # Get existing sale events from Redis
         with get_conn() as conn:
             redis_sales = event_store.get_events(
                 conn=conn,
                 event_type="NEW_SALE",
-                since=datetime.utcnow() - timedelta(days=7),
+                since=datetime.now(timezone.utc) - timedelta(days=7),
                 limit=1000,
             )
 
@@ -68,7 +68,7 @@ def reconcile_sales_data() -> None:
                             conn=conn,
                             sale_id=order_id,
                             sale_date=datetime.fromisoformat(
-                                sale_data.get("occurred_at", datetime.utcnow().isoformat())
+                                sale_data.get("occurred_at", datetime.now(timezone.utc).isoformat())
                             ),
                             theme_slug=sale_data.get("first_order_item", {})
                             .get("product", {})

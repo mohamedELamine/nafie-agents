@@ -43,7 +43,7 @@ def make_launch_announcer_node(
                 "ls_product_id": ls_product_id,
                 "pricing": {"single": 29, "unlimited": 79, "vip": 299},
                 "theme_contract": state.get("theme_contract", {}),
-                "launched_at": __import__("datetime").datetime.utcnow().isoformat() + "Z",
+                "launched_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat() + "Z",
             },
             correlation_id=state.get("approved_event_id"),
         )

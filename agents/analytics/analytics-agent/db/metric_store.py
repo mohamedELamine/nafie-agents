@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import psycopg2
@@ -42,7 +42,7 @@ def save_snapshot(
                     period_end,
                     value,
                     unit,
-                    datetime.utcnow(),
+                    datetime.now(timezone.utc),
                 ),
             )
             conn.commit()
@@ -241,7 +241,7 @@ def aggregate_hourly_to_daily(
     """Aggregate hourly metrics to daily."""
     try:
         with conn.cursor() as cursor:
-            end_date = datetime.utcnow()
+            end_date = datetime.now(timezone.utc)
             start_date = end_date - timedelta(days=days)
 
             query = """

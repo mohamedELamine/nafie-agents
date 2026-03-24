@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 from ..db import marketing_calendar, campaign_log
@@ -50,7 +50,7 @@ def make_rejection_handler_node(resend_client) -> callable:
 
                     # Log the failure
                     log_entry = {
-                        "log_id":      f"log_{post_id}_{int(datetime.utcnow().timestamp())}",
+                        "log_id":      f"log_{post_id}_{int(datetime.now(timezone.utc).timestamp())}",
                         "campaign_id": state.current_campaign.campaign_id,
                         "event_type":  "PUBLISH_FAILED",
                         "details": {

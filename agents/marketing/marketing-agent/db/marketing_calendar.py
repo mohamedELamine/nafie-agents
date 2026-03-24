@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import psycopg2
@@ -32,7 +32,7 @@ def save_campaign(
                     campaign["start_date"],
                     campaign["end_date"],
                     campaign["status"],
-                    datetime.utcnow(),
+                    datetime.now(timezone.utc),
                 ),
             )
             conn.commit()
@@ -66,7 +66,7 @@ def schedule_post(conn: psycopg2.extensions.connection, post: Dict[str, Any]) ->
                     post["asset_snapshot_id"],
                     post["status"],
                     post.get("variant_label"),
-                    datetime.utcnow(),
+                    datetime.now(timezone.utc),
                 ),
             )
             conn.commit()
@@ -82,7 +82,7 @@ def get_pending_posts(
     """Get pending posts that should be published now or later."""
     try:
         with conn.cursor() as cursor:
-            cutoff = datetime.utcnow()
+            cutoff = datetime.now(timezone.utc)
 
             cursor.execute(
                 """
@@ -113,7 +113,7 @@ def mark_published(conn: psycopg2.extensions.connection, post_id: str) -> None:
                 SET status = 'published', published_at = %s 
                 WHERE post_id = %s
                 """,
-                (datetime.utcnow(), post_id),
+                (datetime.now(timezone.utc), post_id),
             )
             conn.commit()
             logger.debug(f"Marked post as published: {post_id}")

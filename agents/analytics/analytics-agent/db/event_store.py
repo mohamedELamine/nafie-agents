@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import psycopg2
@@ -208,7 +208,7 @@ def backfill_sale(
                     "license_tier": license_tier,
                 },
                 "occurred_at": sale_date,
-                "received_at": datetime.utcnow(),
+                "received_at": datetime.now(timezone.utc),
                 "processed": False,
             }
 

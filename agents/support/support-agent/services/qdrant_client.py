@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -112,7 +112,7 @@ class QdrantClient:
                         "payload": {
                             "text": text,
                             "metadata": metadata or {},
-                            "created_at": datetime.utcnow().isoformat(),
+                            "created_at": datetime.now(timezone.utc).isoformat(),
                         },
                     }
                 ],

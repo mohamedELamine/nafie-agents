@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel
@@ -66,7 +66,7 @@ def update_state_with_metric(
         unit="count"
         if "count" in metric_key or "sales" in metric_key.lower()
         else "usd",
-        computed_at=datetime.utcnow(),
+        computed_at=datetime.now(timezone.utc),
     )
 
     new_metrics = dict(state.metrics)

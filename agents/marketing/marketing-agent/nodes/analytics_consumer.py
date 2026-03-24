@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 from ..services.redis_bus import RedisBus
@@ -83,7 +83,7 @@ def make_analytics_consumer_node(redis: RedisBus) -> callable:
                 applied_signals.append({
                     "signal_type": signal_type,
                     "data":        data,
-                    "applied_at":  datetime.utcnow().isoformat(),
+                    "applied_at":  datetime.now(timezone.utc).isoformat(),
                 })
 
                 if signal_type == "best_time" and "best_time" in data:

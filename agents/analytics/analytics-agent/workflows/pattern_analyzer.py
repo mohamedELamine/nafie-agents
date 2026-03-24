@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
 from ..db import pattern_store
@@ -21,7 +21,7 @@ class OperationalPatternAnalyzer:
         """Analyze for sales drop patterns."""
         try:
             # Get sales for current week and previous week
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             with get_conn() as conn:
                 current_week = event_store.get_events(
                     conn=conn,
@@ -70,7 +70,7 @@ class OperationalPatternAnalyzer:
         """Analyze for support surge patterns."""
         try:
             # Get support tickets in last 24 hours
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             cutoff = now - timedelta(hours=24)
             with get_conn() as conn:
                 tickets = event_store.get_events(
@@ -90,7 +90,7 @@ class OperationalPatternAnalyzer:
                         "ticket_count": len(tickets),
                         "time_window": "24 hours",
                     },
-                    detected_at=datetime.utcnow(),
+                    detected_at=datetime.now(timezone.utc),
                     is_actionable=True,
                 )
 
@@ -111,7 +111,7 @@ class BusinessPatternAnalyzer:
         """Analyze which channel drives most sales."""
         try:
             # Get attribution data for last 30 days
-            cutoff = datetime.utcnow() - timedelta(days=30)
+            cutoff = datetime.now(timezone.utc) - timedelta(days=30)
 
             with get_conn() as conn:
                 records = attribution_store.get_records_by_theme(
@@ -139,7 +139,7 @@ class BusinessPatternAnalyzer:
 
             if best_channel[1] > 3:  # Minimum 3 sales
                 return Pattern(
-                    pattern_id=f"best_channel_{int(datetime.utcnow().timestamp())}",
+                    pattern_id=f"best_channel_{int(datetime.now(timezone.utc).timestamp())}",
                     pattern_type="BEST_CHANNEL_30D",
                     analytics_type="BUSINESS",
                     confidence=0.75,
@@ -148,7 +148,7 @@ class BusinessPatternAnalyzer:
                         "sales_count": best_channel[1],
                         "total_sales": sum(channel_sales.values()),
                     },
-                    detected_at=datetime.utcnow(),
+                    detected_at=datetime.now(timezone.utc),
                     is_actionable=True,
                 )
 
@@ -162,7 +162,7 @@ class BusinessPatternAnalyzer:
         """Analyze which day/time drives most sales."""
         try:
             # Get sales data for last 30 days
-            cutoff = datetime.utcnow() - timedelta(days=30)
+            cutoff = datetime.now(timezone.utc) - timedelta(days=30)
             with get_conn() as conn:
                 events = event_store.get_events(
                     conn=conn,
@@ -181,7 +181,7 @@ class BusinessPatternAnalyzer:
                 best_day = max(day_counts.items(), key=lambda x: x[1])
 
                 return Pattern(
-                    pattern_id=f"best_time_{int(datetime.utcnow().timestamp())}",
+                    pattern_id=f"best_time_{int(datetime.now(timezone.utc).timestamp())}",
                     pattern_type="BEST_TIME_30D",
                     analytics_type="BUSINESS",
                     confidence=0.7,
@@ -190,7 +190,7 @@ class BusinessPatternAnalyzer:
                         "sales_count": best_day[1],
                         "total_sales": len(events),
                     },
-                    detected_at=datetime.utcnow(),
+                    detected_at=datetime.now(timezone.utc),
                     is_actionable=True,
                 )
 

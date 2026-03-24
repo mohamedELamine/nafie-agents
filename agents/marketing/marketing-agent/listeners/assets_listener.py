@@ -1,9 +1,8 @@
-import os
-from datetime import datetime
+from datetime import datetime, timezone
 
-import psycopg2
 from core.contracts import EVENT_THEME_ASSETS_READY, STREAM_ASSET_EVENTS
 from ..db import campaign_log
+from ..db.connection import get_conn
 from ..services import get_redis_bus
 from ..logging_config import get_logger
 
@@ -12,14 +11,6 @@ logger = get_logger("listeners.assets_listener")
 
 def make_assets_listener(redis) -> callable:
     """Create the assets listener."""
-
-    def _connect():
-        dsn = (
-            os.environ.get("MARKETING_DATABASE_URL")
-            or os.environ.get("DATABASE_URL")
-            or "postgresql://marketing:password@localhost:5432/marketing_db"
-        )
-        return psycopg2.connect(dsn)
 
     def assets_listener() -> None:
         """Listen for THEME_ASSETS_READY events."""
@@ -49,15 +40,14 @@ def make_assets_listener(redis) -> callable:
 
                     # Log the event
                     log_entry = {
-                        "log_id": f"log_{int(datetime.utcnow().timestamp())}",
+                        "log_id": f"log_{int(datetime.now(timezone.utc).timestamp())}",
                         "campaign_id": campaign_id,
                         "event_type": "ASSETS_RECEIVED",
                         "details": message,
                     }
 
-                    conn = _connect()
-                    campaign_log.save_log(conn, log_entry)
-                    conn.close()
+                    with get_conn() as conn:
+                        campaign_log.save_log(conn, log_entry)
 
                 if message_id:
                     redis_bus.ack(STREAM_ASSET_EVENTS, message_id)

@@ -1,7 +1,7 @@
 import logging
 import os
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from models import PolicyRule
 from db.connection import coerce_datetime, ensure_connection
 
@@ -43,7 +43,7 @@ class PolicyStore:
                         policy.action,
                         policy.value,
                         policy.active,
-                        datetime.utcnow().isoformat(),
+                        datetime.now(timezone.utc).isoformat(),
                         policy.expires_at,
                     ),
                 )

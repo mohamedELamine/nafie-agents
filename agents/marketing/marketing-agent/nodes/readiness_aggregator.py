@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 from ..logging_config import get_logger
@@ -29,7 +29,7 @@ def make_readiness_aggregator_node(redis) -> callable:
             product_live = False
             if state.product_launch_date:
                 hours_since_launch = (
-                    datetime.utcnow() - state.product_launch_date
+                    datetime.now(timezone.utc) - state.product_launch_date
                 ).total_seconds() / 3600
                 product_live = hours_since_launch <= 48  # 48 hours timeout
 
@@ -62,7 +62,7 @@ def make_readiness_aggregator_node(redis) -> callable:
                 if state.product_launch_date
                 else None,
                 "time_since_launch": (
-                    (datetime.utcnow() - state.product_launch_date).total_seconds()
+                    (datetime.now(timezone.utc) - state.product_launch_date).total_seconds()
                     / 3600
                     if state.product_launch_date
                     else None

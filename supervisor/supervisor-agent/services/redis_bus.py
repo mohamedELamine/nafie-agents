@@ -2,7 +2,7 @@ import logging
 from dataclasses import asdict
 from typing import Dict, Any, Optional
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 from models import EventEnvelope
@@ -58,7 +58,7 @@ class RedisBus:
                 correlation_id=correlation_id or str(uuid.uuid4()),
                 causation_id=causation_id or str(uuid.uuid4()),
                 workflow_id=workflow_id,
-                timestamp=datetime.utcnow().isoformat(),
+                timestamp=datetime.now(timezone.utc).isoformat(),
             )
 
             message = json.dumps(asdict(envelope))
@@ -145,7 +145,7 @@ class RedisBus:
             data=data,
             correlation_id=correlation_id or str(uuid.uuid4()),
             causation_id=causation_id or str(uuid.uuid4()),
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
         )
 
 

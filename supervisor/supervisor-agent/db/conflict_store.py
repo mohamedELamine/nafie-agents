@@ -1,7 +1,7 @@
 import logging
 import os
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from models import ConflictRecord, ConflictType
 from db.connection import coerce_datetime, ensure_connection
 
@@ -41,7 +41,7 @@ class ConflictStore:
                         conflict.resolution,
                         conflict.resolved_at,
                         conflict.escalated,
-                        datetime.utcnow().isoformat(),
+                        datetime.now(timezone.utc).isoformat(),
                     ),
                 )
 
@@ -86,7 +86,7 @@ class ConflictStore:
                     SET resolution = %s, resolved_at = %s
                     WHERE conflict_id = %s
                 """,
-                    (resolution, datetime.utcnow().isoformat(), conflict_id),
+                    (resolution, datetime.now(timezone.utc).isoformat(), conflict_id),
                 )
 
                 self.conn.commit()

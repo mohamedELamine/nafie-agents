@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
 import psycopg2
@@ -45,7 +45,7 @@ def get_recent_patterns(
     """Get recent patterns."""
     try:
         with conn.cursor() as cursor:
-            cutoff = datetime.utcnow() - timedelta(days=days)
+            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
             cursor.execute(
                 """

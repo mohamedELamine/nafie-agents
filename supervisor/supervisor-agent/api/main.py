@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from logging_config import configure_logging, get_logger
@@ -38,7 +38,7 @@ async def root():
         "service": "supervisor-agent",
         "version": "1.0.0",
         "status": "running",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -48,7 +48,7 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "supervisor-agent",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -64,7 +64,7 @@ async def list_workflows(status: Optional[WorkflowStatus] = None):
         return {
             "workflows": [_workflow_to_dict(w) for w in workflows],
             "count": len(workflows),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except Exception as e:
@@ -83,7 +83,7 @@ async def get_workflow(instance_id: str):
 
         return {
             "workflow": _workflow_to_dict(workflow),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except HTTPException:
@@ -117,7 +117,7 @@ async def start_workflow(request: dict):
             return {
                 "instance": _workflow_to_dict(instance),
                 "status": "started",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
 
         except ValueError as e:
@@ -139,7 +139,7 @@ async def cancel_workflow(instance_id: str, reason: Optional[str] = None):
         return {
             "status": "cancelled",
             "instance_id": instance_id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except Exception as e:
@@ -166,7 +166,7 @@ async def get_agents_health():
                 }
                 for name, health in all_health.items()
             },
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except Exception as e:
@@ -178,7 +178,7 @@ async def get_agents_health():
 async def get_audit_log(category: Optional[str] = None, since: Optional[str] = None):
     """Get audit log with filtering"""
     try:
-        from datetime import datetime
+        from datetime import datetime, timezone
 
         # Parse since parameter
         since_dt = None
@@ -201,7 +201,7 @@ async def get_audit_log(category: Optional[str] = None, since: Optional[str] = N
         return {
             "audit": [_audit_log_to_dict(a) for a in audit_log],
             "count": len(audit_log),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except Exception as e:
@@ -218,7 +218,7 @@ async def get_policies():
         return {
             "policies": [_policy_to_dict(p) for p in policies],
             "count": len(policies),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except Exception as e:
@@ -255,7 +255,7 @@ async def update_policy(policy_id: str, policy_data: dict):
         return {
             "status": "updated",
             "policy_id": policy_id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except HTTPException:
@@ -274,7 +274,7 @@ async def get_open_conflicts():
         return {
             "conflicts": [_conflict_to_dict(c) for c in conflicts],
             "count": len(conflicts),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except Exception as e:

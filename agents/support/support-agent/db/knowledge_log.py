@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import psycopg2
@@ -25,7 +25,7 @@ def save_update(conn: psycopg2.extensions.connection, update: Dict[str, Any]) ->
                     update["document_id"],
                     update["content"],
                     str(update["metadata"]),
-                    datetime.utcnow(),
+                    datetime.now(timezone.utc),
                 ),
             )
             conn.commit()
@@ -44,7 +44,7 @@ def get_recent_updates(
     """Get recent knowledge base updates."""
     try:
         with conn.cursor() as cursor:
-            cutoff = datetime.utcnow() - timedelta(days=days)
+            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
             if collection:
                 cursor.execute(

@@ -1,7 +1,7 @@
 import os
 import sys
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 from fastapi import FastAPI, HTTPException
@@ -55,7 +55,7 @@ app = FastAPI(
 @app.get("/health")
 async def health_check() -> Dict[str, str]:
     """Health check endpoint."""
-    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
 # ── Campaigns ─────────────────────────────────────────────────────────────────
@@ -64,7 +64,7 @@ async def health_check() -> Dict[str, str]:
 async def create_campaign(campaign: CampaignCreate) -> Dict[str, Any]:
     """Create a new marketing campaign."""
     try:
-        campaign_id = f"campaign_{int(datetime.utcnow().timestamp())}"
+        campaign_id = f"campaign_{int(datetime.now(timezone.utc).timestamp())}"
 
         campaign_data = {
             "campaign_id": campaign_id,
@@ -78,7 +78,7 @@ async def create_campaign(campaign: CampaignCreate) -> Dict[str, Any]:
         }
 
         log_entry = {
-            "log_id": f"log_{int(datetime.utcnow().timestamp())}",
+            "log_id": f"log_{int(datetime.now(timezone.utc).timestamp())}",
             "campaign_id": campaign_id,
             "event_type": "CAMPAIGN_CREATED",
             "details": {"title": campaign.title, "theme_slug": campaign.theme_slug},

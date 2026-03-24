@@ -5,7 +5,7 @@ Immediate Evaluator — يعمل بجانب Event Collector.
 """
 import os
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 from core.contracts import EVENT_ANALYTICS_SIGNAL, STREAM_ANALYTICS_SIGNALS
@@ -84,7 +84,7 @@ class ImmediateEvaluator:
         المصدر: SUPPORT_TICKET_ESCALATED (لا RESOLVED).
         """
         threshold = IMMEDIATE_THRESHOLDS["support_surge"]["threshold"]  # 10
-        since     = datetime.utcnow() - timedelta(hours=24)
+        since     = datetime.now(timezone.utc) - timedelta(hours=24)
 
         with get_conn() as conn:
             count = event_store.count_events(
@@ -114,7 +114,7 @@ class ImmediateEvaluator:
         """
         from ..services.product_registry import get_all_published_slugs, get_launch_date
 
-        threshold_date = datetime.utcnow() - timedelta(
+        threshold_date = datetime.now(timezone.utc) - timedelta(
             days=IMMEDIATE_THRESHOLDS["no_sales_days"]["threshold"]
         )
 
@@ -138,7 +138,7 @@ class ImmediateEvaluator:
                     if not signal_store.signal_sent_recently(
                         conn, "no_output_alert", theme_slug, hours=24
                     ):
-                        days_since = (datetime.utcnow() - reference_date).days
+                        days_since = (datetime.now(timezone.utc) - reference_date).days
                         _emit_signal(
                             signal_type  = SignalType.NO_OUTPUT_ALERT,
                             theme_slug   = theme_slug,
@@ -153,7 +153,7 @@ class ImmediateEvaluator:
         فحص: انخفاض > 50% مقارنة بالأسبوع الماضي.
         يعتمد على occurred_at.
         """
-        now           = datetime.utcnow()
+        now           = datetime.now(timezone.utc)
         this_week_start = now - timedelta(days=7)
         last_week_start = now - timedelta(days=14)
 
@@ -204,7 +204,7 @@ class ImmediateEvaluator:
         فحص: حملات أُطلقت منذ > 24 ساعة بدون منشور.
         """
         threshold_hours = IMMEDIATE_THRESHOLDS["campaign_no_output_hours"]["threshold"]
-        cutoff          = datetime.utcnow() - timedelta(hours=threshold_hours)
+        cutoff          = datetime.now(timezone.utc) - timedelta(hours=threshold_hours)
 
         with get_conn() as conn:
             launched = event_store.get_events(
@@ -259,7 +259,7 @@ def _emit_signal(
     from ..services.redis_bus import get_redis_bus
 
     signal_id = str(uuid.uuid4())
-    now       = datetime.utcnow()
+    now       = datetime.now(timezone.utc)
 
     signal_dict = {
         "signal_id":    signal_id,

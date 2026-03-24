@@ -79,12 +79,12 @@ app.add_middleware(
 
 @app.get("/")
 async def root() -> Dict[str, Any]:
-    from datetime import datetime
+    from datetime import datetime, timezone
     return {
         "service": "visual-production-agent",
         "version": "1.0.0",
         "status": "running",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 

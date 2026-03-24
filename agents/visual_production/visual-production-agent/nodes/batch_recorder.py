@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 from ..db import save_manifest, save_batch
@@ -25,7 +25,7 @@ class BatchRecorderNode:
         batch_log = {
             "batch_id": batch_id,
             "theme_slug": theme_slug,
-            "started_at": datetime.utcnow(),
+            "started_at": datetime.now(timezone.utc),
             "budget_used": total_cost,
             "assets_count": len(assets),
             "status": status,

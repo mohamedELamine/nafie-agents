@@ -3,7 +3,7 @@ Batch log DB operations — psycopg2 + get_conn().
 All writes use ON CONFLICT DO NOTHING (Constitutional Law III).
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 
@@ -29,7 +29,7 @@ def save_batch(conn, batch_data: Dict[str, Any]) -> str:
             (
                 batch_data["batch_id"],
                 batch_data["theme_slug"],
-                batch_data.get("started_at", datetime.utcnow()),
+                batch_data.get("started_at", datetime.now(timezone.utc)),
                 batch_data.get("budget_used", 0.0),
                 batch_data.get("assets_count", 0),
                 batch_data.get("status", "pending"),

@@ -156,7 +156,7 @@ class ClaudeContentClient:
     ) -> ContentPiece:
         """يُنتج مخرجاً واحداً."""
         import uuid
-        from datetime import datetime
+        from datetime import datetime, timezone
 
         system_prompt = self._build_system_prompt(plan, fact_sheet)
         user_prompt   = self._build_generation_prompt(request, plan, template)
@@ -186,7 +186,7 @@ class ClaudeContentClient:
             validation_score  = 0.0,
             validation_issues = [],
             status            = ContentStatus.VALIDATING,
-            created_at        = datetime.utcnow(),
+            created_at        = datetime.now(timezone.utc),
             target_agent      = request.target_agent,
         )
 
@@ -232,7 +232,7 @@ class ClaudeContentClient:
 
         data       = json.loads(raw)
         versioning = _build_versioning_dict(plan)
-        now        = __import__("datetime").datetime.utcnow()
+        now        = __import__("datetime").datetime.now(timezone.utc)
         pieces     = []
 
         for v in data.get("variants", []):
@@ -376,7 +376,7 @@ def _build_versioning_dict(plan: ContentPlan) -> Dict:
         "planner_version":      os.getenv("PLANNER_VERSION", "1.0"),
         "validator_version":    os.getenv("VALIDATOR_VERSION", "1.0"),
         "model_version":        MODEL,
-        "generated_at":         datetime.datetime.utcnow().isoformat(),
+        "generated_at":         datetime.datetime.now(datetime.timezone.utc).isoformat(),
     }
 
 

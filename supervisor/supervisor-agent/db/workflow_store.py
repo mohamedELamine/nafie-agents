@@ -1,7 +1,7 @@
 import logging
 import os
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from models import WorkflowInstance, WorkflowStatus, WorkflowStep, WorkflowType
 from db.connection import coerce_datetime, ensure_connection
 
@@ -43,7 +43,7 @@ class WorkflowStore:
                         instance.current_step,
                         instance.total_steps,
                         instance.status.value,
-                        datetime.utcnow().isoformat(),
+                        datetime.now(timezone.utc).isoformat(),
                         instance.retry_count,
                         str(instance.context) if instance.context else None,
                     ),

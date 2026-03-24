@@ -65,7 +65,7 @@ class TimeoutWatchdog:
 
         for ikey, theme_slug, started_at in rows:
             hours_waiting = (
-                __import__("datetime").datetime.utcnow().replace(tzinfo=__import__("datetime").timezone.utc)
+                __import__("datetime").datetime.now(__import__("datetime").timezone.utc).replace(tzinfo=__import__("datetime").timezone.utc)
                 - started_at.replace(tzinfo=__import__("datetime").timezone.utc)
             ).total_seconds() / 3600
 

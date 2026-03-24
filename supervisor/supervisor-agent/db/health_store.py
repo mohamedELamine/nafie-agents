@@ -1,7 +1,7 @@
 import logging
 import os
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from models import AgentHealthRecord, AgentHealthStatus
 from db.connection import coerce_datetime, ensure_connection
 
@@ -49,7 +49,7 @@ class HealthStore:
                         health_record.active_jobs,
                         health_record.error_rate,
                         health_record.mode,
-                        datetime.utcnow().isoformat(),
+                        datetime.now(timezone.utc).isoformat(),
                         str(health_record.issues) if health_record.issues else None,
                     ),
                 )

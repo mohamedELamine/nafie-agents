@@ -1,5 +1,5 @@
 from typing import TypedDict, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class VisualState(TypedDict):
@@ -32,6 +32,6 @@ def make_initial_state(theme_contract: dict, batch_id: str) -> VisualState:
         "review_decision": None,
         "review_notes": None,
         "status": "pending",
-        "started_at": datetime.utcnow(),
+        "started_at": datetime.now(timezone.utc),
         "completed_at": None,
     }

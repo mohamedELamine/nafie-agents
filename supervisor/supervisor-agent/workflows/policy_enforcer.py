@@ -112,7 +112,7 @@ class PolicyEnforcer:
         """Log policy enforcement action"""
         try:
             from models import PolicyRule
-            from datetime import datetime
+            from datetime import datetime, timezone
 
             policy = PolicyRule(
                 policy_id=policy_id,
@@ -121,7 +121,7 @@ class PolicyEnforcer:
                 action=action,
                 value=None,
                 active=True,
-                created_at=datetime.utcnow().isoformat(),
+                created_at=datetime.now(timezone.utc).isoformat(),
             )
 
             policy_store.save_policy(policy)
