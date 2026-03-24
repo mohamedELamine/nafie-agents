@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from core.contracts import EVENT_ANALYTICS_SIGNAL, STREAM_ANALYTICS_SIGNALS
@@ -192,8 +192,9 @@ def create_signal(
     """Create a new analytics signal."""
     from ..models import AnalyticsSignal
 
+    generated_at = datetime.now(timezone.utc)
     signal = AnalyticsSignal(
-        signal_id=f"{signal_type.value}_{int(datetime.utcnow().timestamp())}",
+        signal_id=f"{signal_type.value}_{int(generated_at.timestamp())}",
         signal_type=signal_type,
         priority=priority,
         target_agent=target_agent,
@@ -203,7 +204,7 @@ def create_signal(
         confidence=confidence,
         supporting_pattern_id=supporting_pattern_id,
         data=data,
-        generated_at=datetime.utcnow(),
+        generated_at=generated_at,
     )
 
     return signal

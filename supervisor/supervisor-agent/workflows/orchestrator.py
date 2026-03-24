@@ -1,7 +1,7 @@
 import logging
 from typing import Optional, Dict, Any
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from models import (
     AuditCategory,
     TERMINAL_STATES,
@@ -184,8 +184,11 @@ class WorkflowOrchestrator:
                 agent_name=completed_event.get("agent_name"),
                 action=completed_event.get("action", "unknown"),
                 status=WorkflowStatus.COMPLETED,
-                started_at=completed_event.get("started_at", datetime.utcnow().isoformat()),
-                completed_at=datetime.utcnow().isoformat(),
+                started_at=completed_event.get(
+                    "started_at",
+                    datetime.now(timezone.utc).isoformat(),
+                ),
+                completed_at=datetime.now(timezone.utc).isoformat(),
                 error=completed_event.get("error"),
             )
             self.workflow_store.update_step(instance_id, step_history_entry)
@@ -228,7 +231,7 @@ class WorkflowOrchestrator:
                 agent_name="unknown",
                 action="timeout",
                 status=WorkflowStatus.FAILED,
-                started_at=datetime.utcnow().isoformat(),
+                started_at=datetime.now(timezone.utc).isoformat(),
                 error="Step timeout",
             )
             self.workflow_store.update_step(instance_id, step_history_entry)
@@ -253,7 +256,7 @@ class WorkflowOrchestrator:
                 return
 
             instance.status = WorkflowStatus.CANCELLED
-            instance.completed_at = datetime.utcnow().isoformat()
+            instance.completed_at = datetime.now(timezone.utc).isoformat()
 
             self.workflow_store.save(instance)
 
@@ -300,7 +303,7 @@ class WorkflowOrchestrator:
                 correlation_id=instance.correlation_id,
                 causation_id=instance.instance_id,
                 workflow_id=instance.instance_id,
-                timestamp=datetime.utcnow().isoformat(),
+                timestamp=datetime.now(timezone.utc).isoformat(),
             )
 
             # Get agent channel
@@ -322,7 +325,7 @@ class WorkflowOrchestrator:
                 agent_name=step["agent"],
                 action=step["action"],
                 status=WorkflowStatus.RUNNING,
-                started_at=datetime.utcnow().isoformat(),
+                started_at=datetime.now(timezone.utc).isoformat(),
             )
             self.workflow_store.update_step(instance.instance_id, step_history_entry)
             instance.step_history.append(step_history_entry)

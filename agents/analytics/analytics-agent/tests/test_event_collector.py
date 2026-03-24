@@ -2,7 +2,7 @@
 Tests for workflows/event_collector.py — event_collector_node()
 All DB interactions are mocked via patch on get_conn and db functions.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 
@@ -126,7 +126,7 @@ class TestEventCollectorNode:
         def fake_get_conn():
             yield conn
 
-        before = datetime.utcnow()
+        before = datetime.now(timezone.utc)
         with patch("analytics_agent.workflows.event_collector.get_conn", fake_get_conn), \
              patch("analytics_agent.workflows.event_collector.event_store.event_exists", return_value=False), \
              patch("analytics_agent.workflows.event_collector.event_store.save_event", side_effect=capture_save), \
@@ -135,7 +135,7 @@ class TestEventCollectorNode:
             from analytics_agent.workflows.event_collector import event_collector_node
             event_collector_node(event)
 
-        after = datetime.utcnow()
+        after = datetime.now(timezone.utc)
         occurred = saved_event.get("occurred_at")
         assert occurred is not None
         assert before <= occurred <= after
@@ -246,9 +246,9 @@ class TestOccurredAtLaw:
 
     def test_received_at_is_current_time(self):
         event = _make_event(occurred_at="2020-01-01T00:00:00")
-        before = datetime.utcnow()
+        before = datetime.now(timezone.utc)
         saved = self._capture_saved(event)
-        after = datetime.utcnow()
+        after = datetime.now(timezone.utc)
         assert before <= saved["received_at"] <= after
 
     def test_received_at_not_used_as_occurred_at(self):
@@ -259,4 +259,4 @@ class TestOccurredAtLaw:
         expected = datetime(2020, 3, 10, 8, 0, 0)
         assert saved["occurred_at"] == expected
         # received_at should be significantly later
-        assert saved["received_at"] > expected
+        assert saved["received_at"] > expected.replace(tzinfo=timezone.utc)

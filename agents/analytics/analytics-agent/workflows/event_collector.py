@@ -3,7 +3,7 @@ Event Collector — طبقة ١
 سريع جداً: تخزين + idempotency + attribution فوري عند NEW_SALE.
 """
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 from core.contracts import (
@@ -62,11 +62,11 @@ def event_collector_node(event: Dict[str, Any]) -> None:
                     f"ANL_002: occurred_at مفقود أو خاطئ في {event_id} — "
                     "استخدام received_at كـ fallback للتخزين فقط"
                 )
-                occurred_at = datetime.utcnow()
+                occurred_at = datetime.now(timezone.utc)
         elif not isinstance(occurred_at, datetime):
-            occurred_at = datetime.utcnow()
+            occurred_at = datetime.now(timezone.utc)
 
-        received_at = datetime.utcnow()
+        received_at = datetime.now(timezone.utc)
 
         analytics_event = AnalyticsEvent(
             event_id     = event_id,

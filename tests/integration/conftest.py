@@ -190,7 +190,7 @@ class RedisBus:
             "correlation_id": correlation_id or uuid.uuid4().hex,
             "causation_id": causation_id or uuid.uuid4().hex,
             "workflow_id": workflow_id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         self.client.xadd(
             self._key(f"streams:{channel}"),

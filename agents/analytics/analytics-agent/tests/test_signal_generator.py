@@ -3,7 +3,7 @@ Tests for workflows/signal_generator.py
 Focus: pure logic (create_signal, generate_signals_from_patterns) and
 idempotency guard (signal_sent_recently checked before send).
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 from analytics_agent.models import SignalType, SignalPriority
@@ -91,7 +91,7 @@ class TestCreateSignal:
         assert signal.data == payload
 
     def test_generated_at_is_recent_datetime(self):
-        before = datetime.utcnow()
+        before = datetime.now(timezone.utc)
         signal = create_signal(
             signal_type=SignalType.LOW_SALES,
             priority=SignalPriority.DAILY,
@@ -100,7 +100,7 @@ class TestCreateSignal:
             confidence=0.4,
             data={},
         )
-        after = datetime.utcnow()
+        after = datetime.now(timezone.utc)
         assert before <= signal.generated_at <= after
 
     def test_two_signals_have_different_ids(self):

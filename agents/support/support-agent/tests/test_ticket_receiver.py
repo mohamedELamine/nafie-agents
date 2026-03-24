@@ -1,7 +1,7 @@
 """
 Tests for nodes/ticket_receiver.py — make_ticket_receiver_node()
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from support_agent.nodes.ticket_receiver import make_ticket_receiver_node
 
 
@@ -61,9 +61,9 @@ class TestTicketReceiverNode:
 
     def test_created_at_defaults_to_now_when_missing(self):
         data = {"platform": "helpscout", "message": "x"}
-        before = datetime.utcnow()
+        before = datetime.now(timezone.utc)
         result = self.node(data)
-        after = datetime.utcnow()
+        after = datetime.now(timezone.utc)
         created = result["ticket"]["created_at"]
         assert before <= created <= after
 
@@ -133,9 +133,9 @@ class TestTicketReceiverNode:
 
     def test_invalid_created_at_falls_back_to_now(self):
         data = {"platform": "helpscout", "message": "x", "created_at": "not-a-date"}
-        before = datetime.utcnow()
+        before = datetime.now(timezone.utc)
         result = self.node(data)
-        after = datetime.utcnow()
+        after = datetime.now(timezone.utc)
         created = result["ticket"]["created_at"]
         assert before <= created <= after
 

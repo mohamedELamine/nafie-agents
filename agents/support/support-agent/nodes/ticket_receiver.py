@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 from ..logging_config import get_logger
@@ -23,7 +23,7 @@ def make_ticket_receiver_node() -> callable:
                 platform = Platform.HELPSCOUT
 
             # Generate a fallback ticket_id if missing
-            fallback_id = f"ticket_{int(datetime.utcnow().timestamp())}"
+            fallback_id = f"ticket_{int(datetime.now(timezone.utc).timestamp())}"
             ticket_id = (
                 ticket_data.get("ticket_id")
                 or ticket_data.get("conversation_id")
@@ -37,10 +37,12 @@ def make_ticket_receiver_node() -> callable:
                 try:
                     created_at = datetime.fromisoformat(raw_created)
                 except (ValueError, TypeError):
-                    logger.warning(f"Invalid created_at '{raw_created}', using utcnow")
-                    created_at = datetime.utcnow()
+                    logger.warning(
+                        f"Invalid created_at '{raw_created}', using current UTC time"
+                    )
+                    created_at = datetime.now(timezone.utc)
             else:
-                created_at = datetime.utcnow()
+                created_at = datetime.now(timezone.utc)
 
             ticket = {
                 "ticket_id":       ticket_id,

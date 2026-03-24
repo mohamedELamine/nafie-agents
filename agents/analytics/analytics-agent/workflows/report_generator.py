@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
 
 from ..db import metric_store
@@ -66,7 +66,7 @@ def generate_weekly_report(
             "total_revenue": total_revenue,
             "highlights": highlights[:5],
             "concerns": concerns[:5],
-            "generated_at": datetime.utcnow(),
+            "generated_at": datetime.now(timezone.utc),
         }
 
         # Save report to database
