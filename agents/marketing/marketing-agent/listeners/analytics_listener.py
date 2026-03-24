@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timezone
 
 from core.contracts import STREAM_ANALYTICS_SIGNALS
@@ -15,7 +16,7 @@ def make_analytics_listener(redis) -> callable:
     def analytics_listener() -> None:
         """Listen for ANALYTICS_SIGNAL events."""
         try:
-            redis_bus = get_redis_bus(redis_url="redis://localhost:6379/0")
+            redis_bus = get_redis_bus(redis_url=os.environ.get("REDIS_URL", "redis://localhost:6379/0"))
 
             messages = redis_bus.read_group(
                 stream=STREAM_ANALYTICS_SIGNALS,

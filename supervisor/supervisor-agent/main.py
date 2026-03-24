@@ -10,6 +10,7 @@ from services.resend_client import ResendClient
 from workflows.health_monitor import health_monitor
 from workflows.conflict_resolver import conflict_resolver
 from workflows.orchestrator import orchestrator
+from db.connection import init_pool, close_pool
 
 load_dotenv()
 
@@ -117,6 +118,7 @@ class Supervisor:
             await self.system_listener.stop()
             await self.command_listener.stop()
 
+            close_pool()
             logger.info("Supervisor agent shutdown complete")
 
         except Exception as e:
@@ -130,6 +132,10 @@ async def main():
         database_url = os.getenv("DATABASE_URL")
         if not database_url:
             raise RuntimeError("DATABASE_URL environment variable is not set")
+
+        # Initialise connection pool before any store is used
+        init_pool()
+
         bus = RedisBus(
             host=redis_url.split("://")[1].split(":")[0] if "://" in redis_url else "localhost",
             port=int(redis_url.split(":")[-1]) if ":" in redis_url.split("://")[-1] else 6379,

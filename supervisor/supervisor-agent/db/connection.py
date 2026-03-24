@@ -1,6 +1,20 @@
+"""
+PostgreSQL connection pool for supervisor-agent.
+Uses psycopg2.pool.SimpleConnectionPool — same pattern as analytics/marketing agents.
+"""
 import os
+from contextlib import contextmanager
 from datetime import datetime
-from typing import Optional
+from typing import Generator, Optional
+
+import psycopg2
+from psycopg2 import pool
+
+import logging
+
+logger = logging.getLogger("supervisor.db.connection")
+
+_pool: pool.SimpleConnectionPool | None = None
 
 
 def require_database_url(db_url: Optional[str] = None) -> str:
@@ -10,18 +24,36 @@ def require_database_url(db_url: Optional[str] = None) -> str:
     return resolved
 
 
-def connect_db(db_url: Optional[str] = None):
-    import psycopg2
+def init_pool(minconn: int = 2, maxconn: int = 10) -> None:
+    """Initialise the global connection pool (call once at startup)."""
+    global _pool
+    dsn = require_database_url()
+    _pool = pool.SimpleConnectionPool(minconn, maxconn, dsn)
+    logger.info(f"Connection pool initialised (min={minconn}, max={maxconn})")
 
-    conn = psycopg2.connect(require_database_url(db_url))
-    conn.autocommit = False
-    return conn
+
+def close_pool() -> None:
+    """Close all connections in the pool (call on shutdown)."""
+    global _pool
+    if _pool:
+        _pool.closeall()
+        _pool = None
+        logger.info("Connection pool closed")
 
 
-def ensure_connection(conn, db_url: Optional[str] = None):
-    if conn is None or getattr(conn, "closed", 1):
-        return connect_db(db_url)
-    return conn
+@contextmanager
+def get_conn() -> Generator[psycopg2.extensions.connection, None, None]:
+    """Context-manager that checks out a connection and returns it when done."""
+    if _pool is None:
+        raise RuntimeError("Connection pool is not initialised — call init_pool() first")
+    conn = _pool.getconn()
+    try:
+        yield conn
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        _pool.putconn(conn)
 
 
 def coerce_datetime(value):

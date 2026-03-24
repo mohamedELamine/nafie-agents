@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timezone
 
 from core.contracts import EVENT_THEME_ASSETS_READY, STREAM_ASSET_EVENTS
@@ -15,7 +16,7 @@ def make_assets_listener(redis) -> callable:
     def assets_listener() -> None:
         """Listen for THEME_ASSETS_READY events."""
         try:
-            redis_bus = get_redis_bus(redis_url="redis://localhost:6379/0")
+            redis_bus = get_redis_bus(redis_url=os.environ.get("REDIS_URL", "redis://localhost:6379/0"))
 
             messages = redis_bus.read_group(
                 stream=STREAM_ASSET_EVENTS,

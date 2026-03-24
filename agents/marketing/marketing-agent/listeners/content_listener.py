@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timezone
 
 from core.contracts import EVENT_CONTENT_READY, STREAM_CONTENT_EVENTS
@@ -15,7 +16,7 @@ def make_content_listener(redis) -> callable:
     def content_listener() -> None:
         """Listen for CONTENT_READY events."""
         try:
-            redis_bus = get_redis_bus(redis_url="redis://localhost:6379/0")
+            redis_bus = get_redis_bus(redis_url=os.environ.get("REDIS_URL", "redis://localhost:6379/0"))
 
             # Check if we have a campaign waiting for content
             # For now, just log the event

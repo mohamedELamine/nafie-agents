@@ -1,23 +1,14 @@
 import logging
-import os
 from typing import Optional
 from datetime import datetime, timezone
 import uuid
 from models import SupervisorAuditLog, AuditCategory
-from db.connection import coerce_datetime, ensure_connection
+from db.connection import coerce_datetime, get_conn
 
 logger = logging.getLogger("supervisor.audit_store")
 
 
 class AuditStore:
-    def __init__(self, db_url: Optional[str] = None):
-        self.db_url = db_url
-        self.conn = None
-
-    def _connect(self):
-        """Initialize database connection"""
-        self.conn = ensure_connection(self.conn, self.db_url)
-
     def write_audit(
         self,
         category: AuditCategory,
@@ -30,38 +21,34 @@ class AuditStore:
     ) -> str:
         """Write audit log entry - never delete"""
         try:
-            self._connect()
-            with self.conn.cursor() as cursor:
-                cursor.execute(
-                    """
-                    INSERT INTO supervisor_audit_log
-                    (log_id, category, action, target, workflow_id, correlation_id,
-                     details, outcome, created_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    RETURNING log_id
-                """,
-                    (
-                        str(uuid.uuid4()),
-                        category.value,
-                        action,
-                        target,
-                        workflow_id,
-                        correlation_id,
-                        str(details) if details else None,
-                        outcome,
-                        datetime.now(timezone.utc).isoformat(),
-                    ),
-                )
-
-                self.conn.commit()
-                log_id = cursor.fetchone()[0]
-
-                logger.info(f"Audit logged: {category.value} - {action}")
-
-                return log_id
+            with get_conn() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute(
+                        """
+                        INSERT INTO supervisor_audit_log
+                        (log_id, category, action, target, workflow_id, correlation_id,
+                         details, outcome, created_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        RETURNING log_id
+                    """,
+                        (
+                            str(uuid.uuid4()),
+                            category.value,
+                            action,
+                            target,
+                            workflow_id,
+                            correlation_id,
+                            str(details) if details else None,
+                            outcome,
+                            datetime.now(timezone.utc).isoformat(),
+                        ),
+                    )
+                    conn.commit()
+                    log_id = cursor.fetchone()[0]
+                    logger.info(f"Audit logged: {category.value} - {action}")
+                    return log_id
 
         except Exception as e:
-            self.conn.rollback()
             logger.error(f"Error writing audit: {e}")
             raise
 
@@ -70,43 +57,43 @@ class AuditStore:
     ) -> list[SupervisorAuditLog]:
         """Get audit log with optional filtering"""
         try:
-            self._connect()
-            with self.conn.cursor() as cursor:
-                if category and since:
-                    cursor.execute(
-                        """
-                        SELECT * FROM supervisor_audit_log
-                        WHERE category = %s AND created_at >= %s
-                        ORDER BY created_at DESC
-                    """,
-                        (category.value, since.isoformat()),
-                    )
-                elif category:
-                    cursor.execute(
-                        """
-                        SELECT * FROM supervisor_audit_log
-                        WHERE category = %s
-                        ORDER BY created_at DESC
-                    """,
-                        (category.value,),
-                    )
-                elif since:
-                    cursor.execute(
-                        """
-                        SELECT * FROM supervisor_audit_log
-                        WHERE created_at >= %s
-                        ORDER BY created_at DESC
-                    """,
-                        (since.isoformat(),),
-                    )
-                else:
-                    cursor.execute("""
-                        SELECT * FROM supervisor_audit_log
-                        ORDER BY created_at DESC
-                    """)
+            with get_conn() as conn:
+                with conn.cursor() as cursor:
+                    if category and since:
+                        cursor.execute(
+                            """
+                            SELECT * FROM supervisor_audit_log
+                            WHERE category = %s AND created_at >= %s
+                            ORDER BY created_at DESC
+                        """,
+                            (category.value, since.isoformat()),
+                        )
+                    elif category:
+                        cursor.execute(
+                            """
+                            SELECT * FROM supervisor_audit_log
+                            WHERE category = %s
+                            ORDER BY created_at DESC
+                        """,
+                            (category.value,),
+                        )
+                    elif since:
+                        cursor.execute(
+                            """
+                            SELECT * FROM supervisor_audit_log
+                            WHERE created_at >= %s
+                            ORDER BY created_at DESC
+                        """,
+                            (since.isoformat(),),
+                        )
+                    else:
+                        cursor.execute("""
+                            SELECT * FROM supervisor_audit_log
+                            ORDER BY created_at DESC
+                        """)
 
-                rows = cursor.fetchall()
-                return [self._row_to_audit(row) for row in rows]
+                    rows = cursor.fetchall()
+                    return [self._row_to_audit(row) for row in rows]
 
         except Exception as e:
             logger.error(f"Error getting audit log: {e}")
@@ -114,7 +101,6 @@ class AuditStore:
 
     def _row_to_audit(self, row) -> SupervisorAuditLog:
         """Convert database row to SupervisorAuditLog"""
-
         return SupervisorAuditLog(
             log_id=row[0],
             category=AuditCategory(row[1]),
@@ -128,4 +114,4 @@ class AuditStore:
         )
 
 
-audit_store = AuditStore(db_url=os.environ.get("DATABASE_URL"))
+audit_store = AuditStore()
