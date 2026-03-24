@@ -1,3 +1,5 @@
+import os
+import sys
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, Dict
@@ -5,9 +7,12 @@ from typing import Any, Dict
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from ..db import marketing_calendar, campaign_log
-from ..db.connection import close_pool, get_conn, init_pool
-from ..logging_config import configure_logging, get_logger
+# Ensure the agent root is on sys.path for `uvicorn api.main:app`.
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+from db import marketing_calendar, campaign_log
+from db.connection import close_pool, get_conn, init_pool
+from logging_config import configure_logging, get_logger
 
 configure_logging()
 logger = get_logger("api.main")
@@ -114,9 +119,9 @@ async def get_campaign(campaign_id: str) -> Dict[str, Any]:
 async def schedule_campaign(campaign_id: str) -> Dict[str, Any]:
     """Start the marketing pipeline for a campaign."""
     try:
-        from ..agent import run_marketing_pipeline
-        from ..state import MarketingState
-        from ..models import Campaign
+        from agent import run_marketing_pipeline
+        from state import MarketingState
+        from models import Campaign
 
         with get_conn() as conn:
             campaign_data = marketing_calendar.get_campaign_by_id(conn, campaign_id)

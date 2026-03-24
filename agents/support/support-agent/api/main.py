@@ -2,17 +2,21 @@
 Support-agent FastAPI application.
 Handles HelpScout and Facebook webhooks, runs the LangGraph pipeline.
 """
-import logging
+import os
+import sys
 from contextlib import asynccontextmanager
 from typing import Any, Dict
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from ..agent import run_support_pipeline
-from ..db.connection import close_pool, init_pool
-from ..logging_config import get_logger
-from ..services import (
+# Ensure the agent root is on sys.path for `uvicorn api.main:app`.
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+from agent import run_support_pipeline
+from db.connection import close_pool, init_pool
+from logging_config import get_logger
+from services import (
     get_claude_client,
     get_facebook_client,
     get_helpscout_client,
@@ -43,7 +47,10 @@ async def lifespan(app: FastAPI):
     _services["qdrant"] = get_qdrant_client()
     _services["redis"] = get_redis_bus()
     _services["facebook"] = get_facebook_client()
-    _services["resend"] = ResendClient()
+    _services["resend"] = ResendClient(
+        api_key=os.environ.get("RESEND_API_KEY", ""),
+        owner_email=os.environ.get("OWNER_EMAIL", ""),
+    )
 
     logger.info("All services initialised.")
     yield

@@ -1,8 +1,8 @@
 """
 Visual-production-agent FastAPI application.
 """
-import logging
 import os
+import sys
 import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Dict
@@ -11,8 +11,11 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from ..db import get_conn, get_manifest, init_pool, close_pool
-from ..logging_config import get_logger
+# Ensure the agent root is on sys.path for `uvicorn api.main:app`.
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+from db import get_conn, get_manifest, init_pool, close_pool
+from logging_config import get_logger
 
 logger = get_logger("api.main")
 
@@ -141,7 +144,7 @@ async def run_visual_pipeline_endpoint(request: Request) -> Dict[str, Any]:
 
         logger.info(f"Manual pipeline triggered — batch {batch_id}")
 
-        from ..agent import build_visual_agent, run_visual_pipeline
+        from agent import build_visual_agent, run_visual_pipeline
 
         agent = build_visual_agent()
         result = await run_visual_pipeline(

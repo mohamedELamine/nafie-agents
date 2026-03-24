@@ -98,7 +98,8 @@ class LaunchListener:
         try:
             checkpoint_key = f"workflow:{ikey}:checkpoint"
             self.redis_bus._redis.delete(checkpoint_key)
-        except Exception: pass
+        except Exception as e:
+            logger.warning("LaunchListener | failed to delete checkpoint key=%s: %s", checkpoint_key, e)
         # إعادة استدعاء الـ graph مع الـ assets الجاهزة
         resume_state = {
             "idempotency_key": ikey,

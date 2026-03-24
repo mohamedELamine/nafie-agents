@@ -143,7 +143,10 @@ async def main():
         database=os.getenv("POSTGRES_DB", "support_agent"),
     )
 
-    resend_client = ResendClient(api_key=os.getenv("RESEND_API_KEY"))
+    resend_client = ResendClient(
+        api_key=os.getenv("RESEND_API_KEY"),
+        owner_email=os.getenv("OWNER_EMAIL", ""),
+    )
 
     agent = SupportAgent(
         helpscout_client=helpscout_client,

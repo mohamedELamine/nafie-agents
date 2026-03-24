@@ -41,12 +41,12 @@ class ResendClient:
             
             for attempt in range(retry):
                 try:
-                    response = resend.Emails.send(
-                        from="onboarding@resend.dev",
-                        to=[email],
-                        subject=subject,
-                        html=body,
-                    )
+                    response = resend.Emails.send({
+                        "from": "onboarding@resend.dev",
+                        "to": [email],
+                        "subject": subject,
+                        "html": body,
+                    })
 
                     if response.id:
                         logger.info(f"Sent escalation alert: {response.id}")
@@ -85,12 +85,12 @@ class ResendClient:
             
             for attempt in range(retry):
                 try:
-                    response = resend.Emails.send(
-                        from="onboarding@resend.dev",
-                        to=[email],
-                        subject=subject,
-                        html=body,
-                    )
+                    response = resend.Emails.send({
+                        "from": "onboarding@resend.dev",
+                        "to": [email],
+                        "subject": subject,
+                        "html": body,
+                    })
 
                     if response.id:
                         logger.info(f"Sent recurring issue alert: {response.id}")

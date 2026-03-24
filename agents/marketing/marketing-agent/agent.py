@@ -61,7 +61,10 @@ def _make_whatsapp() -> WhatsAppClient:
 
 
 def _make_resend() -> ResendClient:
-    return ResendClient(os.environ.get("RESEND_API_KEY", ""))
+    return ResendClient(
+        api_key=os.environ.get("RESEND_API_KEY", ""),
+        owner_email=os.environ.get("OWNER_EMAIL", ""),
+    )
 
 
 # ── graph builder ─────────────────────────────────────────────────────────────

@@ -2,6 +2,8 @@
 Analytics Agent API
 FastAPI app مع lifespan كامل: DB pool + services + scheduler + event_collector.
 """
+import os
+import sys
 import threading
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
@@ -10,7 +12,11 @@ from typing import Any, Dict, List, Optional
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 
-from ..db import (
+# Ensure the agent root is on sys.path so absolute imports work
+# when launched via `uvicorn api.main:app`.
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+from db import (
     attribution_store,
     event_store,
     metric_store,
@@ -19,12 +25,12 @@ from ..db import (
     report_store,
     signal_store,
 )
-from ..db.connection import close_pool, get_conn, init_pool
-from ..logging_config import configure_logging, get_logger
-from ..metric_definitions import get_all_metric_keys
-from ..models import SignalOutcome
-from ..scheduler import start_scheduler
-from ..workflows.event_collector import start_event_collector
+from db.connection import close_pool, get_conn, init_pool
+from logging_config import configure_logging, get_logger
+from metric_definitions import get_all_metric_keys
+from models import SignalOutcome
+from scheduler import start_scheduler
+from workflows.event_collector import start_event_collector
 
 configure_logging()
 logger = get_logger("api.main")

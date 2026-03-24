@@ -1,7 +1,8 @@
+import asyncio
 import os
 import signal
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -29,7 +30,7 @@ class AnalyticsScheduler:
         self.immediate_evaluator = ImmediateEvaluator()
         self.running = False
 
-    def start(self) -> None:
+    async def start(self) -> None:
         """Start the scheduler."""
         try:
             # Configure logging
@@ -45,7 +46,7 @@ class AnalyticsScheduler:
             logger.info("Analytics scheduler started")
 
             # Keep running
-            self._run_until_interrupted()
+            await self._run_until_interrupted()
 
         except Exception as e:
             logger.error(f"Error starting scheduler: {e}")
@@ -172,11 +173,11 @@ class AnalyticsScheduler:
         except Exception as e:
             logger.error(f"Error generating monthly report: {e}")
 
-    def _run_until_interrupted(self) -> None:
+    async def _run_until_interrupted(self) -> None:
         """Keep the scheduler running until interrupted."""
         try:
             while self.running:
-                await __import__("asyncio").sleep(1)
+                await asyncio.sleep(1)
         except KeyboardInterrupt:
             logger.info("Received interrupt signal")
         finally:
@@ -193,11 +194,22 @@ class AnalyticsScheduler:
             logger.error(f"Error stopping scheduler: {e}")
 
 
-def main() -> None:
-    """Main entry point for the analytics scheduler."""
+def start_scheduler() -> AnalyticsScheduler:
+    """Create, configure, and start the analytics scheduler. Returns the instance."""
     scheduler = AnalyticsScheduler()
-    scheduler.start()
+    scheduler._add_jobs()
+    scheduler.scheduler.start()
+    scheduler.running = True
+    logger.info("Analytics scheduler started")
+    return scheduler
+
+
+async def main() -> None:
+    """Main entry point for the analytics scheduler."""
+    configure_logging(os.getenv("LOG_LEVEL", "INFO"))
+    scheduler = AnalyticsScheduler()
+    await scheduler.start()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

@@ -25,13 +25,12 @@ class ResendClient:
         """Send critical alert to owner with retry."""
         for attempt in range(retry):
             try:
-                response = resend.Emails.send(
-                    from="onboarding@resend.dev",
-                    to=[self.owner_email],
-                    subject=subject,
-                    html=body,
-                    template_data=template_data,
-                )
+                response = resend.Emails.send({
+                    "from": "onboarding@resend.dev",
+                    "to": [self.owner_email],
+                    "subject": subject,
+                    "html": body,
+                })
 
                 if response.id:
                     logger.info(f"Sent owner alert: {response.id}")
@@ -57,13 +56,12 @@ class ResendClient:
         """Send weekly report to owner with retry."""
         for attempt in range(retry):
             try:
-                response = resend.Emails.send(
-                    from="onboarding@resend.dev",
-                    to=[self.owner_email],
-                    subject=subject,
-                    html=html_content,
-                    template_data=template_data,
-                )
+                response = resend.Emails.send({
+                    "from": "onboarding@resend.dev",
+                    "to": [self.owner_email],
+                    "subject": subject,
+                    "html": html_content,
+                })
 
                 if response.id:
                     logger.info(f"Sent weekly report: {response.id}")
