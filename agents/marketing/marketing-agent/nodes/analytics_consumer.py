@@ -9,7 +9,8 @@ from ..logging_config import get_logger
 logger = get_logger("nodes.analytics_consumer")
 
 # Signal types the agent may apply autonomously (USER_LOCKED_DECISIONS excluded)
-AUTO_APPLICABLE_SIGNALS = {"best_post_time", "best_format", "engagement_peak"}
+# Must match AnalyticsSignalType.value from analytics-agent/models.py
+AUTO_APPLICABLE_SIGNALS = {"best_time", "best_channel"}
 
 
 def _update_state_with_formats(state: MarketingState, formats: List[str]) -> MarketingState:
@@ -82,18 +83,17 @@ def make_analytics_consumer_node(redis: RedisBus) -> callable:
                     "applied_at":  datetime.utcnow().isoformat(),
                 })
 
-                if signal_type == "best_post_time" and "best_time" in data:
+                if signal_type == "best_time" and "best_time" in data:
                     try:
                         best_time = datetime.fromisoformat(data["best_time"])
                         state = update_state_with_best_post_time(state, best_time)
                     except Exception as exc:
-                        logger.error(f"Error applying best_post_time: {exc}")
+                        logger.error(f"Error applying best_time signal: {exc}")
 
-                elif signal_type == "best_format" and "format" in data:
-                    formats = data["format"]
-                    if not isinstance(formats, list):
-                        formats = [formats]
-                    state = _update_state_with_formats(state, formats)
+                elif signal_type == "best_channel" and "best_channel" in data:
+                    channel = data["best_channel"]
+                    channels = channel if isinstance(channel, list) else [channel]
+                    state = _update_state_with_formats(state, channels)
 
                 if message_id:
                     redis.ack("analytics:signals", message_id)

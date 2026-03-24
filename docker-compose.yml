@@ -62,7 +62,7 @@ services:
       TELEGRAM_BOT_TOKEN:  ${TELEGRAM_BOT_TOKEN}
       TELEGRAM_CHAT_ID:    ${TELEGRAM_CHAT_ID}
       LOG_LEVEL:           ${LOG_LEVEL:-INFO}
-    command: python -m supervisor.agent
+    command: python supervisor/agent.py
     depends_on:
       redis:    { condition: service_healthy }
       postgres: { condition: service_healthy }
@@ -138,7 +138,7 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       LANGSMITH_API_KEY: ${LANGSMITH_API_KEY}
       LOG_LEVEL:         ${LOG_LEVEL:-INFO}
-    command: python -m agents.support.agent
+    command: python agents/support/agent.py
     depends_on:
       redis:    { condition: service_healthy }
       postgres: { condition: service_healthy }
@@ -161,7 +161,7 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       LANGSMITH_API_KEY: ${LANGSMITH_API_KEY}
       LOG_LEVEL:         ${LOG_LEVEL:-INFO}
-    command: python -m agents.content.agent
+    command: python agents/content/agent.py
     depends_on:
       redis:    { condition: service_healthy }
       postgres: { condition: service_healthy }
@@ -191,7 +191,7 @@ services:
       TELEGRAM_BOT_TOKEN:   ${TELEGRAM_BOT_TOKEN}
       TELEGRAM_CHANNEL_ID:  ${TELEGRAM_CHANNEL_ID}
       LOG_LEVEL:            ${LOG_LEVEL:-INFO}
-    command: python -m agents.marketing.agent
+    command: python agents/marketing/agent.py
     depends_on:
       redis:    { condition: service_healthy }
       postgres: { condition: service_healthy }
@@ -218,7 +218,7 @@ services:
       WOO_CONSUMER_KEY:  ${WOO_CONSUMER_KEY}
       WOO_CONSUMER_SECRET: ${WOO_CONSUMER_SECRET}
       LOG_LEVEL:         ${LOG_LEVEL:-INFO}
-    command: python -m agents.analytics.agent
+    command: python agents/analytics/agent.py
     depends_on:
       redis:    { condition: service_healthy }
       postgres: { condition: service_healthy }
@@ -245,7 +245,7 @@ services:
       KLING_ACCESS_KEY:    ${KLING_ACCESS_KEY}
       PIKA_API_KEY:        ${PIKA_API_KEY}
       LOG_LEVEL:           ${LOG_LEVEL:-INFO}
-    command: python -m agents.visual_production.agent
+    command: python agents/visual_production/agent.py
     depends_on:
       redis:    { condition: service_healthy }
       postgres: { condition: service_healthy }

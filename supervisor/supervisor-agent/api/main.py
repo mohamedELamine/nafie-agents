@@ -64,7 +64,7 @@ async def list_workflows(status: Optional[WorkflowStatus] = None):
             workflows = workflow_store.get_active_workflows()
 
         return {
-            "workflows": [self._workflow_to_dict(w) for w in workflows],
+            "workflows": [_workflow_to_dict(w) for w in workflows],
             "count": len(workflows),
             "timestamp": datetime.utcnow().isoformat(),
         }
@@ -84,7 +84,7 @@ async def get_workflow(instance_id: str):
             raise HTTPException(status_code=404, detail="Workflow not found")
 
         return {
-            "workflow": self._workflow_to_dict(workflow),
+            "workflow": _workflow_to_dict(workflow),
             "timestamp": datetime.utcnow().isoformat(),
         }
 
@@ -117,7 +117,7 @@ async def start_workflow(request: dict):
             )
 
             return {
-                "instance": self._workflow_to_dict(instance),
+                "instance": _workflow_to_dict(instance),
                 "status": "started",
                 "timestamp": datetime.utcnow().isoformat(),
             }
@@ -201,7 +201,7 @@ async def get_audit_log(category: Optional[str] = None, since: Optional[str] = N
             audit_log = audit_store.get_audit_log()
 
         return {
-            "audit": [self._audit_log_to_dict(a) for a in audit_log],
+            "audit": [_audit_log_to_dict(a) for a in audit_log],
             "count": len(audit_log),
             "timestamp": datetime.utcnow().isoformat(),
         }
@@ -218,7 +218,7 @@ async def get_policies():
         policies = policy_store.get_active_policies()
 
         return {
-            "policies": [self._policy_to_dict(p) for p in policies],
+            "policies": [_policy_to_dict(p) for p in policies],
             "count": len(policies),
             "timestamp": datetime.utcnow().isoformat(),
         }
@@ -274,7 +274,7 @@ async def get_open_conflicts():
         conflicts = conflict_store.get_open_conflicts()
 
         return {
-            "conflicts": [self._conflict_to_dict(c) for c in conflicts],
+            "conflicts": [_conflict_to_dict(c) for c in conflicts],
             "count": len(conflicts),
             "timestamp": datetime.utcnow().isoformat(),
         }
@@ -301,7 +301,7 @@ def _workflow_to_dict(workflow) -> dict:
         "failure_reason": workflow.failure_reason,
         "retry_count": workflow.retry_count,
         "context": workflow.context,
-        "step_history": [self._step_to_dict(s) for s in workflow.step_history],
+        "step_history": [_step_to_dict(s) for s in workflow.step_history],
     }
 
 

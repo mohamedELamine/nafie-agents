@@ -4,6 +4,9 @@ import logging
 from dotenv import load_dotenv
 
 from logging_config import configure_logging, get_logger
+from redis_bus import RedisBus
+from listeners.system_listener import SystemListener
+from listeners.command_listener import CommandListener
 
 load_dotenv()
 
@@ -24,14 +27,15 @@ class Supervisor:
     ):
         self.redis = redis_bus
         self.db_url = db_url
-        self.resend = None  # Will be initialized in main()
+        self.resend_api_key = resend_api_key
+        self.resend = None  # Will be initialized in initialize()
         self.owner_email = owner_email
         self.heartbeat_timeout = heartbeat_timeout_sec
         self.health_check_interval = health_check_interval_sec
 
         # Initialize components
-        self.system_listener = None
-        self.command_listener = None
+        self.system_listener = SystemListener()
+        self.command_listener = CommandListener()
 
     async def initialize(self):
         """Initialize all components"""
@@ -44,11 +48,7 @@ class Supervisor:
             from workflows.conflict_resolver import conflict_resolver
             from db.audit_store import audit_store
 
-            self.resend = resend.Resend(api_key=resend_api_key)
-
-            # Initialize listeners
-            self.system_listener = system_listener
-            self.command_listener = command_listener
+            self.resend = resend.Resend(api_key=self.resend_api_key)
 
             # Set up error handlers
             self._setup_error_handlers()
@@ -99,8 +99,6 @@ class Supervisor:
 
     def _setup_error_handlers(self):
         """Set up error handlers"""
-        import sys
-
         async def handle_exception(loop, context):
             exception = context.get("exception")
             if exception:
@@ -126,14 +124,20 @@ class Supervisor:
 async def main():
     """Main entry point"""
     try:
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+        bus = RedisBus(
+            host=redis_url.split("://")[1].split(":")[0] if "://" in redis_url else "localhost",
+            port=int(redis_url.split(":")[-1]) if ":" in redis_url.split("://")[-1] else 6379,
+        )
+
         # Initialize supervisor
         supervisor = Supervisor(
-            redis_bus=redis_bus,
+            redis_bus=bus,
             db_url=os.getenv(
                 "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/supervisor"
             ),
             resend_api_key=os.getenv("RESEND_API_KEY", ""),
-            owner_email=os.getenv("OWNER_EMAIL", "admin@yourdomain.com"),
+            owner_email=os.getenv("OWNER_EMAIL", "admin@example.com"),
             heartbeat_timeout_sec=int(os.getenv("HEARTBEAT_TIMEOUT_SEC", "120")),
             health_check_interval_sec=int(os.getenv("HEALTH_CHECK_INTERVAL_SEC", "60")),
         )

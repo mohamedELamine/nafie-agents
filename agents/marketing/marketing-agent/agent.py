@@ -173,8 +173,8 @@ class MarketingAgent(BaseAgent):
     agent_name = AgentName.MARKETING
 
     async def setup_handlers(self) -> None:
-        await self.bus.subscribe(EventType.CONTENT_READY, self.run)
-        await self.bus.subscribe(EventType.VISUAL_READY, self.run)
+        self.bus.on(EventType.CONTENT_READY, self.run)
+        self.bus.on(EventType.VISUAL_READY, self.run)
 
     async def run(self, event: BusinessEvent) -> None:
         try:

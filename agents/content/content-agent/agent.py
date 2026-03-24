@@ -160,10 +160,7 @@ class ContentAgent(BaseAgent):
     agent_name = AgentName.CONTENT
 
     async def setup_handlers(self) -> None:
-        await self.bus.subscribe(
-            EventType.CONTENT_REQUESTED,
-            self.run,
-        )
+        self.bus.on(EventType.CONTENT_REQUESTED, self.run)
 
     async def run(self, event: BusinessEvent) -> None:
         try:

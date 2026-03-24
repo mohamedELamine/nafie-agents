@@ -246,7 +246,7 @@ class SupportAgent(BaseAgent):
         self._redis_bus = get_redis_bus()
 
     async def setup_handlers(self) -> None:
-        await self.bus.subscribe(EventType.TICKET_CREATED, self.run)
+        self.bus.on(EventType.TICKET_CREATED, self.run)
 
     async def run(self, event: BusinessEvent) -> None:
         try:

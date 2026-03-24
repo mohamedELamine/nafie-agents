@@ -32,7 +32,7 @@ class AnalyticsAgent(BaseAgent):
             EventType.CAMPAIGN_SENT,
             EventType.THEME_PUBLISHED,
         ]:
-            await self.bus.subscribe(event_type, self.run)
+            self.bus.on(event_type, self.run)
 
     async def run(self, event: BusinessEvent) -> None:
         try:
