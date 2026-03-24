@@ -170,6 +170,14 @@ def send_owner_critical_alert_for_signal(
         logger.error(f"Error sending owner critical alert: {e}")
 
 
+def send_owner_critical_alert(
+    signal_type: SignalType,
+    data: Dict[str, Any],
+) -> None:
+    """Backward-compatible export used by workflows package."""
+    send_owner_critical_alert_for_signal(signal_type=signal_type, data=data)
+
+
 def create_signal(
     signal_type: SignalType,
     priority: SignalPriority,

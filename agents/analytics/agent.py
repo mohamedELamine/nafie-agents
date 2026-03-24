@@ -20,7 +20,19 @@ sys.modules.setdefault("analytics_agent", _pkg)
 sys.path.insert(0, os.path.abspath(_AGENT_DIR))
 sys.path.insert(0, os.path.abspath(_ROOT_DIR))
 
-from analytics_agent.agent import AnalyticsAgent
+from analytics_agent import agent as _agent_module
+
+ImmediateEvaluator = _agent_module.ImmediateEvaluator
+
+
+class AnalyticsAgent(_agent_module.AnalyticsAgent):
+    async def run(self, event):
+        try:
+            evaluator = ImmediateEvaluator()
+            evaluator.evaluate(event)
+            _agent_module.logger.info(f"Processed event: {event['event_type']}")
+        except Exception as exc:
+            await self.emit_error(str(exc), trace_id=event.get("trace_id"))
 
 if __name__ == "__main__":
     asyncio.run(AnalyticsAgent().start())

@@ -18,7 +18,24 @@ sys.modules.setdefault("marketing_agent", _pkg)
 sys.path.insert(0, os.path.abspath(_AGENT_DIR))
 sys.path.insert(0, os.path.abspath(_ROOT_DIR))
 
-from marketing_agent.agent import MarketingAgent
+from marketing_agent import agent as _agent_module
+
+run_marketing_pipeline = _agent_module.run_marketing_pipeline
+
+
+class MarketingAgent(_agent_module.MarketingAgent):
+    async def run(self, event):
+        try:
+            state = _agent_module.MarketingState(**event["payload"])
+            result = run_marketing_pipeline(state)
+            if result.get("success"):
+                await self.emit(
+                    _agent_module.EventType.CAMPAIGN_SENT,
+                    result,
+                    trace_id=event.get("trace_id"),
+                )
+        except Exception as exc:
+            await self.emit_error(str(exc), trace_id=event.get("trace_id"))
 
 if __name__ == "__main__":
     asyncio.run(MarketingAgent().start())

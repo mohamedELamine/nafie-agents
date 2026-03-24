@@ -1,11 +1,12 @@
 import logging
 import sys
 from datetime import datetime
-from typing import Any, Dict
+from typing import TYPE_CHECKING, Any, Dict
 
 from redis.exceptions import RedisError
 
-from .services.redis_bus import RedisBus
+if TYPE_CHECKING:
+    from .services.redis_bus import RedisBus
 
 
 def configure_logging(log_level: str = "INFO") -> None:
@@ -35,7 +36,7 @@ def get_logger(name: str) -> logging.Logger:
 class RedisLogHandler(logging.Handler):
     """Send log messages to Redis for centralized logging."""
 
-    def __init__(self, redis_bus: RedisBus):
+    def __init__(self, redis_bus: "RedisBus"):
         super().__init__()
         self.redis_bus = redis_bus
         self.channel = "analytics:logs"

@@ -159,6 +159,8 @@ TECHNICAL_TERMS_KEEP = {
     "Gutenberg", "PHP", "CSS", "HTML", "API", "COD",
 }
 
+BRAND_CONSTITUTION_VERSION = "1.0"
+
 
 # ══════════════════════════════════════════════
 # Dataclasses

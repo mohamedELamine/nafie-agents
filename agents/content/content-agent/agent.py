@@ -9,7 +9,7 @@ import asyncio
 import logging
 import os
 import sys
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 # Add parent directories to path for core imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
@@ -41,19 +41,21 @@ from nodes import (
     route_after_review,
     route_after_validation,
 )
-from services.claude_client import ClaudeContentClient
-from services.redis_bus import RedisBus
-from services.resend_client import ContentResendClient
 from state import ContentState, make_initial_state
+
+if TYPE_CHECKING:
+    from services.claude_client import ClaudeContentClient
+    from services.redis_bus import RedisBus
+    from services.resend_client import ContentResendClient
 
 logger = logging.getLogger("content_agent.agent")
 
 
 def build_content_graph(
-    registry:     Optional[ContentRegistry]      = None,
-    claude:       Optional[ClaudeContentClient]  = None,
-    redis_bus:    Optional[RedisBus]             = None,
-    resend:       Optional[ContentResendClient]  = None,
+    registry: Optional[ContentRegistry] = None,
+    claude: Optional["ClaudeContentClient"] = None,
+    redis_bus: Optional["RedisBus"] = None,
+    resend: Optional["ContentResendClient"] = None,
 ):
     """
     يبني الـ graph الكامل مع dependency injection.
@@ -64,6 +66,10 @@ def build_content_graph(
     → content_generator → content_validator → review_gate
     → content_dispatcher → registry_updater → content_recorder → END
     """
+    from services.claude_client import ClaudeContentClient
+    from services.redis_bus import RedisBus
+    from services.resend_client import ContentResendClient
+
     # ── Services Init ─────────────────────────────────────────────
     _registry  = registry  or ContentRegistry()
     _claude    = claude    or ClaudeContentClient()

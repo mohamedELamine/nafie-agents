@@ -1,54 +1,31 @@
-from .facebook_client import (
-    FacebookClient,
-    get_facebook_client,
-)
+from importlib import import_module
 
-from .instagram_client import (
-    InstagramClient,
-    get_instagram_client,
-)
+_EXPORTS = {
+    "FacebookClient": ".facebook_client",
+    "get_facebook_client": ".facebook_client",
+    "InstagramClient": ".instagram_client",
+    "get_instagram_client": ".instagram_client",
+    "TikTokClient": ".tiktok_client",
+    "get_tiktok_client": ".tiktok_client",
+    "WhatsAppClient": ".whatsapp_client",
+    "get_whatsapp_client": ".whatsapp_client",
+    "RedisBus": ".redis_bus",
+    "get_redis_bus": ".redis_bus",
+    "ResendClient": ".resend_client",
+    "send_campaign_launched": ".resend_client",
+    "send_publish_failed": ".resend_client",
+    "send_paid_channel_suggestion": ".resend_client",
+}
 
-from .tiktok_client import (
-    TikTokClient,
-    get_tiktok_client,
-)
+__all__ = list(_EXPORTS)
 
-from .whatsapp_client import (
-    WhatsAppClient,
-    get_whatsapp_client,
-)
 
-from .redis_bus import (
-    RedisBus,
-    get_redis_bus,
-)
+def __getattr__(name: str):
+    module_name = _EXPORTS.get(name)
+    if module_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
-from .resend_client import (
-    ResendClient,
-    send_campaign_launched,
-    send_publish_failed,
-    send_paid_channel_suggestion,
-)
-
-__all__ = [
-    # Facebook
-    "FacebookClient",
-    "get_facebook_client",
-    # Instagram
-    "InstagramClient",
-    "get_instagram_client",
-    # TikTok
-    "TikTokClient",
-    "get_tiktok_client",
-    # WhatsApp
-    "WhatsAppClient",
-    "get_whatsapp_client",
-    # Redis Bus
-    "RedisBus",
-    "get_redis_bus",
-    # Resend
-    "ResendClient",
-    "send_campaign_launched",
-    "send_publish_failed",
-    "send_paid_channel_suggestion",
-]
+    module = import_module(module_name, __name__)
+    value = getattr(module, name)
+    globals()[name] = value
+    return value

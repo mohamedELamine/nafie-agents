@@ -90,6 +90,25 @@ def send_owner_alert(
     return client.send_owner_alert(subject, body, template_data, retry)
 
 
+def send_owner_critical_alert(
+    api_key: str,
+    owner_email: str,
+    subject: str,
+    body: str,
+    template_data: Optional[Dict[str, Any]] = None,
+    retry: int = 3,
+) -> bool:
+    """Backward-compatible alias used by signal generation."""
+    return send_owner_alert(
+        api_key=api_key,
+        owner_email=owner_email,
+        subject=subject,
+        body=body,
+        template_data=template_data,
+        retry=retry,
+    )
+
+
 def send_weekly_report(
     api_key: str,
     owner_email: str,
