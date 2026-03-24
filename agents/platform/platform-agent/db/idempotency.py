@@ -41,7 +41,10 @@ def check_completed(
             """,
             (ikey, node_name),
         )
-        return cur.fetchone() is not None
+        found = cur.fetchone() is not None
+    if hasattr(db_conn, "rollback"):
+        db_conn.rollback()
+    return found
 
 
 def mark_started(
@@ -106,6 +109,8 @@ def idempotency_guard(node_name: str) -> Callable:
                 row = cur.fetchone()
 
             if row is not None:
+                if hasattr(db_conn, "rollback"):
+                    db_conn.rollback()
                 logger.info(
                     "idempotency_guard | SKIP (already completed) | node=%s key=%s",
                     node_name,
@@ -119,6 +124,9 @@ def idempotency_guard(node_name: str) -> Callable:
                     except (json.JSONDecodeError, TypeError):
                         pass
                 return state
+
+            if hasattr(db_conn, "rollback"):
+                db_conn.rollback()
 
             # ── تسجيل البدء ─────────────────────────────────────────
             _log_started(db_conn, ikey, node_name)

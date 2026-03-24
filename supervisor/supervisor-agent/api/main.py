@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 from datetime import datetime
@@ -13,6 +13,7 @@ from db.health_store import health_store
 from db.policy_store import policy_store
 from db.conflict_store import conflict_store
 from agent_registry import AGENT_REGISTRY
+from workflows.orchestrator import orchestrator
 
 configure_logging()
 logger = get_logger(__name__)

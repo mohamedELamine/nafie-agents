@@ -1,4 +1,5 @@
 import logging
+import os
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -20,6 +21,7 @@ class HelpScoutClient:
         self.api_key = api_key
         self.mailbox_id = mailbox_id
         self.client = httpx.Client(
+            base_url=self.BASE_URL,
             headers={
                 "Authorization": f"Bearer {api_key}",
                 "Accept": "application/json",
@@ -47,12 +49,17 @@ class HelpScoutClient:
 
     def reply(
         self,
-        conversation_id: str,
-        body: str,
+        conversation_id: Optional[str] = None,
+        body: str = "",
         is_html: bool = False,
+        ticket_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Reply to a conversation."""
         try:
+            conversation_id = conversation_id or ticket_id
+            if not conversation_id:
+                raise ValueError("conversation_id is required")
+
             endpoint = f"{self.CONVERSATIONS_ENDPOINT}/{conversation_id}/reply"
 
             content = body if is_html else body
@@ -131,11 +138,20 @@ class HelpScoutClient:
 
     def add_note(
         self,
-        conversation_id: str,
-        body: str,
+        conversation_id: Optional[str] = None,
+        body: Optional[str] = None,
+        ticket_id: Optional[str] = None,
+        note: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Add a note to a conversation."""
         try:
+            conversation_id = conversation_id or ticket_id
+            body = body or note
+            if not conversation_id:
+                raise ValueError("conversation_id is required")
+            if body is None:
+                raise ValueError("body is required")
+
             endpoint = f"{self.CONVERSATIONS_ENDPOINT}/{conversation_id}/note"
 
             response = self.client.post(
@@ -158,6 +174,20 @@ class HelpScoutClient:
             return {"success": False, "error": str(e)}
 
 
-def get_helpscout_client(api_key: str, mailbox_id: int) -> HelpScoutClient:
+def get_helpscout_client(
+    api_key: Optional[str] = None,
+    mailbox_id: Optional[int] = None,
+) -> HelpScoutClient:
     """Get HelpScout client instance."""
-    return HelpScoutClient(api_key, mailbox_id)
+    resolved_mailbox_id = mailbox_id
+    if resolved_mailbox_id is None:
+        resolved_mailbox_id = int(
+            os.environ.get("HELPSCOUT_MAILBOX_ID")
+            or os.environ.get("HELP_SCOUT_MAILBOX_ID", "0")
+        )
+    return HelpScoutClient(
+        api_key
+        or os.environ.get("HELPSCOUT_API_KEY")
+        or os.environ.get("HELP_SCOUT_API_KEY", ""),
+        resolved_mailbox_id,
+    )

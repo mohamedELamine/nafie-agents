@@ -1,7 +1,5 @@
 import logging
 import asyncio
-from typing import Optional, Dict, Any
-import json
 from redis_bus import redis_bus
 from workflows.orchestrator import orchestrator
 from agent_registry import AGENT_REGISTRY
@@ -10,8 +8,9 @@ logger = logging.getLogger("supervisor.command_listener")
 
 
 class CommandListener:
-    def __init__(self):
+    def __init__(self, resend_client=None):
         self.running = False
+        self.resend = resend_client
 
     async def start(self):
         """Start listening for command events"""
@@ -226,8 +225,11 @@ class CommandListener:
             alert_type = data.get("alert_type")
             details = data.get("details", {})
 
-            if alert_type and "resend" in globals():
-                await resend.send_critical_system_alert(alert_type=alert_type, details=details)
+            if alert_type and self.resend:
+                await self.resend.send_critical_system_alert(
+                    alert_type=alert_type,
+                    details=details,
+                )
 
             logger.warning(f"Processed critical alert: {alert_type}")
 

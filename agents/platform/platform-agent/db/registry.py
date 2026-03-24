@@ -19,6 +19,48 @@ import psycopg2.extras
 logger = logging.getLogger("platform_agent.db.registry")
 
 
+class _RegistryConnectionProxy:
+    """Lease a pooled connection lazily for legacy node code that expects `.db`."""
+
+    def __init__(
+        self,
+        get_conn: Callable[[], AbstractContextManager[psycopg2.extensions.connection]],
+    ) -> None:
+        self._get_conn = get_conn
+        self._conn_cm: Optional[AbstractContextManager[psycopg2.extensions.connection]] = None
+        self._conn: Optional[psycopg2.extensions.connection] = None
+
+    def _ensure_conn(self) -> psycopg2.extensions.connection:
+        if self._conn is None:
+            self._conn_cm = self._get_conn()
+            self._conn = self._conn_cm.__enter__()
+        return self._conn
+
+    def cursor(self, *args: Any, **kwargs: Any):
+        return self._ensure_conn().cursor(*args, **kwargs)
+
+    def commit(self) -> None:
+        conn = self._ensure_conn()
+        try:
+            conn.commit()
+        finally:
+            self.close()
+
+    def rollback(self) -> None:
+        if self._conn is None:
+            return
+        try:
+            self._conn.rollback()
+        finally:
+            self.close()
+
+    def close(self) -> None:
+        if self._conn_cm is not None:
+            self._conn_cm.__exit__(None, None, None)
+        self._conn_cm = None
+        self._conn = None
+
+
 class RegistryError(Exception):
     """خطأ في عمليات Registry — يحمل error_code."""
 
@@ -40,6 +82,7 @@ class ProductRegistry:
         get_conn: Callable[[], AbstractContextManager[psycopg2.extensions.connection]],
     ) -> None:
         self._get_conn = get_conn
+        self.db = _RegistryConnectionProxy(get_conn)
 
     # ─────────────────────────────────────────────────────────
     # T010 — exists

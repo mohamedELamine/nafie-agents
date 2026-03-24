@@ -5,7 +5,44 @@ core/contracts.py
 كل حدث يحمل payload يتبع مخطط محدد هنا.
 """
 
-from typing import TypedDict, Optional, List, Literal
+from datetime import datetime, timezone
+from typing import TypedDict, Optional, List, Literal, Dict, Any
+import uuid
+
+
+# ══════════════════════════════════════════════════════
+# Streams / Channels الموحدة
+# ══════════════════════════════════════════════════════
+
+STREAM_THEME_EVENTS = "theme-events"
+STREAM_PRODUCT_EVENTS = "product-events"
+STREAM_ASSET_EVENTS = "asset-events"
+STREAM_SUPPORT_EVENTS = "support-events"
+STREAM_MARKETING_EVENTS = "marketing-events"
+STREAM_CONTENT_EVENTS = "content-events"
+STREAM_BUILDER_EVENTS = "builder-events"
+STREAM_ANALYTICS_SIGNALS = "analytics:signals"
+
+
+# ══════════════════════════════════════════════════════
+# أسماء الأحداث المشتركة بين الوكلاء
+# ══════════════════════════════════════════════════════
+
+EVENT_THEME_APPROVED = "THEME_APPROVED"
+EVENT_THEME_ASSETS_READY = "THEME_ASSETS_READY"
+EVENT_THEME_ASSETS_PARTIALLY_READY = "THEME_ASSETS_PARTIALLY_READY"
+EVENT_NEW_PRODUCT_LIVE = "NEW_PRODUCT_LIVE"
+EVENT_THEME_UPDATED_LIVE = "THEME_UPDATED_LIVE"
+EVENT_CONTENT_REQUEST = "CONTENT_REQUEST"
+EVENT_CONTENT_READY = "CONTENT_READY"
+EVENT_CONTENT_PRODUCED = "CONTENT_PRODUCED"
+EVENT_CONTENT_REVIEW_DECIDED = "CONTENT_REVIEW_DECIDED"
+EVENT_ANALYTICS_SIGNAL = "ANALYTICS_SIGNAL"
+EVENT_CAMPAIGN_LAUNCHED = "CAMPAIGN_LAUNCHED"
+EVENT_POST_PUBLISHED = "POST_PUBLISHED"
+EVENT_POST_FAILED = "POST_FAILED"
+EVENT_POST_SCHEDULED = "POST_SCHEDULED"
+EVENT_VISUAL_REVIEW_REQUESTED = "VISUAL_REVIEW_REQUESTED"
 
 
 # ══════════════════════════════════════════════════════
@@ -52,6 +89,31 @@ class ThemePublishedPayload(TypedDict):
     product_id:  int
     product_url: str
     price:       float
+
+
+class ThemeApprovedPayload(TypedDict, total=False):
+    theme_slug: str
+    version: str
+    theme_contract: Dict[str, Any]
+    package_path: str
+
+
+class ThemeAssetsReadyPayload(TypedDict, total=False):
+    batch_id: str
+    theme_slug: str
+    idempotency_key: str
+    assets: List[Dict[str, Any]]
+
+
+class NewProductLivePayload(TypedDict, total=False):
+    theme_slug: str
+    theme_name_ar: str
+    version: str
+    wp_post_url: str
+    ls_product_id: str
+    pricing: Dict[str, Any]
+    launched_at: str
+    theme_contract: Dict[str, Any]
 
 
 # ══════════════════════════════════════════════════════
@@ -104,6 +166,19 @@ class ContentReadyPayload(TypedDict):
     word_count:   int
 
 
+class AgentContentReadyPayload(TypedDict, total=False):
+    content_id: str
+    content_type: str
+    theme_slug: Optional[str]
+    title: str
+    body: str
+    variants: Optional[List[Dict[str, str]]]
+    metadata: Dict[str, Any]
+    validation_score: Optional[float]
+    request_id: str
+    target_agent: str
+
+
 # ══════════════════════════════════════════════════════
 # عقد التسويق (Marketing)
 # ══════════════════════════════════════════════════════
@@ -114,6 +189,21 @@ class CampaignTriggeredPayload(TypedDict):
     theme_slug:    Optional[str]
     target_segment: str
     channels:      List[Literal["email", "twitter", "instagram", "telegram"]]
+
+
+class CampaignLaunchedPayload(TypedDict, total=False):
+    campaign_id: str
+    theme_slug: Optional[str]
+    published_posts: int
+
+
+class PostPublishedPayload(TypedDict, total=False):
+    campaign_id: str
+    theme_slug: Optional[str]
+    post_id: str
+    channel: str
+    format: str
+    published_at: str
 
 
 # ══════════════════════════════════════════════════════
@@ -135,6 +225,16 @@ class AnomalyDetectedPayload(TypedDict):
     actual:        float
     severity:      Literal["low", "medium", "high", "critical"]
     recommendation: str
+
+
+class AnalyticsSignalPayload(TypedDict, total=False):
+    signal_id: str
+    signal_type: str
+    priority: str
+    target_agent: str
+    theme_slug: Optional[str]
+    data: Dict[str, Any]
+    generated_at: str
 
 
 # ══════════════════════════════════════════════════════
@@ -162,3 +262,22 @@ class VisualReadyPayload(TypedDict):
     visual_type: str
     files:       List[str]   # مسارات الملفات
     metadata:    dict
+
+
+def build_ecosystem_event(
+    event_type: str,
+    data: Dict[str, Any],
+    source: str,
+    correlation_id: Optional[str] = None,
+    schema_version: str = "1.0",
+) -> Dict[str, Any]:
+    """Build a shared event envelope for cross-agent stream messages."""
+    return {
+        "event_id": str(uuid.uuid4()),
+        "event_type": event_type,
+        "schema_version": schema_version,
+        "source": source,
+        "occurred_at": datetime.now(timezone.utc).isoformat(),
+        "correlation_id": correlation_id or str(uuid.uuid4()),
+        "data": data,
+    }

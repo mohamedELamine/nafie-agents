@@ -1,6 +1,7 @@
 import datetime
 import json
 import logging
+import os
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -238,6 +239,60 @@ class ClaudeClient:
             return 0.5, []
 
 
-def get_claude_client(api_key: str) -> ClaudeClient:
+    def classify_risk(
+        self,
+        ticket: Dict[str, Any],
+        intent: Dict[str, Any],
+        answer: Dict[str, Any],
+    ) -> tuple[List[str], str]:
+        """Classify escalation risk after a draft answer is prepared."""
+        try:
+            prompt = f"""
+            Assess the support risk of the following ticket and draft answer.
+
+            Ticket: {ticket}
+            Intent: {intent}
+            Draft Answer: {answer}
+
+            Return JSON with:
+            - flags: [billing_dispute, legal_threat, churn_risk, account_issue]
+            - risk_level: low | medium | high | critical
+            """
+
+            response = self.client.post(
+                self.BASE_URL,
+                json={
+                    "model": self.MODEL,
+                    "max_tokens": 1024,
+                    "temperature": 0.2,
+                    "system": "You are a support risk classifier. Return ONLY valid JSON.",
+                    "messages": [{"role": "user", "content": prompt}],
+                },
+            )
+            response.raise_for_status()
+
+            data = response.json()
+            content = data["content"][0]["text"]
+            result = json.loads(content)
+
+            flags = result.get("flags", [])
+            risk_level = result.get("risk_level", "low")
+            if not isinstance(flags, list):
+                flags = []
+            if risk_level not in {"low", "medium", "high", "critical"}:
+                risk_level = "low"
+
+            return flags, risk_level
+
+        except Exception as e:
+            logger.error(f"Error classifying risk: {e}")
+            return [], "low"
+
+
+def get_claude_client(api_key: Optional[str] = None) -> ClaudeClient:
     """Get Claude client instance."""
-    return ClaudeClient(api_key)
+    return ClaudeClient(
+        api_key
+        or os.environ.get("ANTHROPIC_API_KEY")
+        or os.environ.get("CLAUDE_API_KEY", "")
+    )

@@ -3,7 +3,11 @@ from typing import Any, Dict, List
 
 from ..models import ContentSnapshot
 from ..services.redis_bus import RedisBus
-from ..state import MarketingState, update_state_with_best_post_time
+from ..state import (
+    MarketingState,
+    update_state_with_best_post_time,
+    update_state_with_selected_channels,
+)
 from ..logging_config import get_logger
 
 logger = get_logger("nodes.analytics_consumer")
@@ -93,7 +97,7 @@ def make_analytics_consumer_node(redis: RedisBus) -> callable:
                 elif signal_type == "best_channel" and "best_channel" in data:
                     channel = data["best_channel"]
                     channels = channel if isinstance(channel, list) else [channel]
-                    state = _update_state_with_formats(state, channels)
+                    state = update_state_with_selected_channels(state, channels)
 
                 if message_id:
                     redis.ack("analytics:signals", message_id)

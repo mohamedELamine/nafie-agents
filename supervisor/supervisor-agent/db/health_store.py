@@ -1,33 +1,29 @@
 import logging
+import os
 from typing import Optional
 from datetime import datetime
 import uuid
 from models import AgentHealthRecord, AgentHealthStatus
+from db.connection import coerce_datetime, ensure_connection
 
 logger = logging.getLogger("supervisor.health_store")
 
 
 class HealthStore:
-    def __init__(self, db_url: str):
+    def __init__(self, db_url: Optional[str] = None):
         self.db_url = db_url
-        self._connect()
+        self.conn = None
 
     def _connect(self):
         """Initialize database connection"""
-        try:
-            import psycopg2
-
-            self.conn = psycopg2.connect(self.db_url)
-            self.conn.autocommit = False
-        except Exception as e:
-            logger.error(f"Database connection failed: {e}")
-            raise
+        self.conn = ensure_connection(self.conn, self.db_url)
 
     def save_health_record(
         self, agent_name: str, health_record: AgentHealthRecord
     ) -> AgentHealthRecord:
         """Save health record for agent"""
         try:
+            self._connect()
             with self.conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -72,6 +68,7 @@ class HealthStore:
     def get_health(self, agent_name: str) -> Optional[AgentHealthRecord]:
         """Get health record for agent"""
         try:
+            self._connect()
             with self.conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -93,6 +90,7 @@ class HealthStore:
     def get_all_health(self) -> dict[str, AgentHealthRecord]:
         """Get health for all agents"""
         try:
+            self._connect()
             with self.conn.cursor() as cursor:
                 cursor.execute("""
                     SELECT * FROM agent_health
@@ -108,6 +106,7 @@ class HealthStore:
     def get_unhealthy_agents(self) -> list[str]:
         """Get all unhealthy agents"""
         try:
+            self._connect()
             with self.conn.cursor() as cursor:
                 cursor.execute("""
                     SELECT agent_name FROM agent_health
@@ -128,14 +127,14 @@ class HealthStore:
         return AgentHealthRecord(
             agent_name=row[0],
             status=AgentHealthStatus(row[1]),
-            last_heartbeat=datetime.fromisoformat(row[2]) if row[2] else None,
+            last_heartbeat=coerce_datetime(row[2]),
             queue_depth=row[3],
             active_jobs=row[4],
             error_rate=row[5],
             mode=row[6],
-            last_checked=datetime.fromisoformat(row[7]) if row[7] else None,
+            last_checked=coerce_datetime(row[7]),
             issues=row[8],
         )
 
 
-health_store = HealthStore(db_url="")
+health_store = HealthStore(db_url=os.environ.get("DATABASE_URL"))

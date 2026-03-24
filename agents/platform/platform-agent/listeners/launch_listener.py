@@ -6,8 +6,15 @@ from __future__ import annotations
 import json
 import logging
 import os
+from core.contracts import (
+    EVENT_THEME_APPROVED,
+    EVENT_THEME_ASSETS_PARTIALLY_READY,
+    EVENT_THEME_ASSETS_READY,
+    STREAM_ASSET_EVENTS,
+    STREAM_THEME_EVENTS,
+)
 from agent import build_launch_graph
-from services.redis_bus import RedisBus, STREAM_THEME_EVENTS, STREAM_ASSET_EVENTS, CONSUMER_GROUP
+from services.redis_bus import RedisBus, CONSUMER_GROUP
 from state import PlatformStatus
 
 logger = logging.getLogger("platform_agent.listeners.launch")
@@ -35,7 +42,7 @@ class LaunchListener:
             for msg_id, msg_data in msgs:
                 try:
                     event = json.loads(msg_data.get("data", "{}"))
-                    if event.get("event_type") == "THEME_APPROVED":
+                    if event.get("event_type") == EVENT_THEME_APPROVED:
                         self._handle_theme_approved(event)
                     self.redis_bus.ack(STREAM_THEME_EVENTS, msg_id)
                 except Exception as exc:
@@ -47,7 +54,10 @@ class LaunchListener:
             for msg_id, msg_data in msgs:
                 try:
                     event = json.loads(msg_data.get("data", "{}"))
-                    if event.get("event_type") in ("THEME_ASSETS_READY", "THEME_ASSETS_PARTIALLY_READY"):
+                    if event.get("event_type") in (
+                        EVENT_THEME_ASSETS_READY,
+                        EVENT_THEME_ASSETS_PARTIALLY_READY,
+                    ):
                         self._handle_assets_ready(event)
                     self.redis_bus.ack(STREAM_ASSET_EVENTS, msg_id)
                 except Exception as exc:

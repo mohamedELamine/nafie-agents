@@ -3,6 +3,10 @@ from typing import Optional, Dict, Any
 import uuid
 from datetime import datetime
 from models import (
+    AuditCategory,
+    TERMINAL_STATES,
+    WorkflowStatus,
+    WorkflowStep,
     WorkflowInstance,
     WorkflowType,
     EventEnvelope,
@@ -18,6 +22,7 @@ from db.conflict_store import conflict_store
 from db.health_store import health_store
 from db.policy_store import policy_store
 from redis_bus import redis_bus
+from policy_engine import check_user_locked, evaluate_policies
 
 logger = logging.getLogger("supervisor.orchestrator")
 
@@ -42,9 +47,10 @@ class WorkflowOrchestrator:
         """Start a new workflow with idempotency check"""
         try:
             from workflow_definitions import WORKFLOW_DEFINITIONS, build_workflow_business_key
+            context_data = context or {}
 
             # Build business key
-            business_key = build_workflow_business_key(workflow_type, context or {})
+            business_key = build_workflow_business_key(workflow_type, context_data)
 
             # Check idempotency
             existing = self.workflow_store.get_by_business_key(business_key)
@@ -71,20 +77,20 @@ class WorkflowOrchestrator:
                     raise ValueError(f"SUP_001: {error_msg}")
 
             # Check user locked decisions
-            if context and check_user_locked(context.get("decision_domain", "")):
+            if context_data and check_user_locked(context_data.get("decision_domain", "")):
                 error_msg = "User locked decision attempted"
                 logger.error(error_msg)
                 self.audit_store.write_audit(
                     category=AuditCategory.OVERRIDE,
                     action="user_locked_decision",
                     target=f"workflow_{workflow_type.value}",
-                    details={"context": context, "reason": "user_locked_decision"},
+                    details={"context": context_data, "reason": "user_locked_decision"},
                     outcome="blocked",
                 )
                 raise ValueError(f"SUP_301: {error_msg}")
 
             # Evaluate policies
-            policies = evaluate_policies(context or {})
+            policies = evaluate_policies(context_data)
             if policies:
                 logger.warning(f"Policy violations during workflow start: {len(policies)}")
                 self.audit_store.write_audit(
@@ -103,15 +109,15 @@ class WorkflowOrchestrator:
                 instance_id=instance_id,
                 workflow_type=workflow_type,
                 business_key=business_key,
-                theme_slug=context.get("theme_slug")
+                theme_slug=context_data.get("theme_slug")
                 if workflow_type in [WorkflowType.THEME_LAUNCH, WorkflowType.THEME_UPDATE]
                 else None,
-                correlation_id=context.get("correlation_id") if context else None,
+                correlation_id=context_data.get("correlation_id"),
                 current_step=1,
                 total_steps=total_steps,
                 status=WorkflowStatus.RUNNING,
                 retry_count=0,
-                context=context,
+                context=context_data,
                 step_history=[],
             )
 
@@ -127,7 +133,7 @@ class WorkflowOrchestrator:
                 details={
                     "workflow_type": workflow_type.value,
                     "business_key": business_key,
-                    "context": context,
+                    "context": context_data,
                 },
                 outcome="success",
             )

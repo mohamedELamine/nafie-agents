@@ -138,14 +138,15 @@ async def submit_review(idempotency_key: str, body: ReviewRequest):
         raise HTTPException(status_code=422, detail=f"decision يجب أن يكون: {valid_decisions}")
 
     # التحقق من وجود الـ workflow
-    with _registry.db.cursor() as cur:
-        cur.execute(
-            "SELECT 1 FROM execution_log WHERE idempotency_key=%s AND node_name='HUMAN_REVIEW_GATE' AND status='started' LIMIT 1",
-            (idempotency_key,),
-        )
-        if not cur.fetchone():
-            raise HTTPException(status_code=404, detail={"error_code": "PLT_404",
-                                                          "message": "Workflow not found or not awaiting review"})
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM execution_log WHERE idempotency_key=%s AND node_name='HUMAN_REVIEW_GATE' AND status='started' LIMIT 1",
+                (idempotency_key,),
+            )
+            if not cur.fetchone():
+                raise HTTPException(status_code=404, detail={"error_code": "PLT_404",
+                                                              "message": "Workflow not found or not awaiting review"})
 
     # تخزين القرار في Redis
     review_data = json.dumps({"decision": body.decision, "notes": body.notes, "edits": body.edits or {}})

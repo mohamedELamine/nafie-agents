@@ -1,8 +1,11 @@
 import logging
+from dataclasses import asdict
 from typing import Dict, Any, Optional
 import json
 from datetime import datetime
 import uuid
+
+from models import EventEnvelope
 
 logger = logging.getLogger("supervisor.redis_bus")
 
@@ -58,7 +61,9 @@ class RedisBus:
                 timestamp=datetime.utcnow().isoformat(),
             )
 
-            message = json.dumps(envelope.dict())
+            message = json.dumps(asdict(envelope))
+            stream = f"streams:{channel}"
+            await self._redis.xadd(stream, {"payload": message})
             await self._redis.publish(channel, message)
 
             logger.info(f"Published {event_type} to {channel}")
@@ -77,13 +82,14 @@ class RedisBus:
 
             stream = f"streams:{channel}"
             result = await self._redis.xreadgroup(
-                group, consumer, {stream: "0"}, count=count, block=0
+                group, consumer, {stream: ">"}, count=count, block=0
             )
 
             if result:
                 message = result[0][1][0]
                 message_id = message[0]
-                message_data = json.loads(message[1])
+                payload = message[1].get("payload", "{}")
+                message_data = json.loads(payload)
 
                 return {"id": message_id, "data": message_data}
 
@@ -120,6 +126,8 @@ class RedisBus:
             return True
 
         except Exception as e:
+            if "BUSYGROUP" in str(e):
+                return True
             logger.error(f"Error creating consumer group: {e}")
             raise
 

@@ -24,7 +24,12 @@ def make_ticket_receiver_node() -> callable:
 
             # Generate a fallback ticket_id if missing
             fallback_id = f"ticket_{int(datetime.utcnow().timestamp())}"
-            ticket_id = ticket_data.get("ticket_id") or ticket_data.get("conversation_id") or fallback_id
+            ticket_id = (
+                ticket_data.get("ticket_id")
+                or ticket_data.get("conversation_id")
+                or ticket_data.get("id")
+                or fallback_id
+            )
 
             # Parse occurred_at — fallback to utcnow with warning
             raw_created = ticket_data.get("created_at")
@@ -41,6 +46,7 @@ def make_ticket_receiver_node() -> callable:
                 "ticket_id":       ticket_id,
                 "platform":        platform,
                 "conversation_id": ticket_data.get("conversation_id"),
+                "page_id":         ticket_data.get("page_id"),
                 "customer_email":  (
                     ticket_data.get("customer_email")
                     or ticket_data.get("customer", {}).get("email")

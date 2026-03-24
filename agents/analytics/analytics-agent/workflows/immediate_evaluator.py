@@ -8,6 +8,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
+from core.contracts import EVENT_ANALYTICS_SIGNAL, STREAM_ANALYTICS_SIGNALS
 from ..db import event_store, signal_store
 from ..db.connection import get_conn
 from ..logging_config import get_logger
@@ -18,6 +19,9 @@ logger = get_logger("workflows.immediate_evaluator")
 
 
 class ImmediateEvaluator:
+    def evaluate(self, event: Dict[str, Any]) -> None:
+        """Backward-compatible entry point used by the agent runtime."""
+        self.on_new_event(event)
 
     def on_new_event(self, event: Dict[str, Any]) -> None:
         """
@@ -279,11 +283,14 @@ def _emit_signal(
 
         redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
         bus       = get_redis_bus(redis_url)
-        bus.publish("analytics_events", {
-            "event_type": "ANALYTICS_SIGNAL",
-            "source":     "analytics_agent",
-            "data":       signal_dict,
-        })
+        bus.publish_stream(
+            STREAM_ANALYTICS_SIGNALS,
+            {
+                "event_type": EVENT_ANALYTICS_SIGNAL,
+                "source": "analytics_agent",
+                **signal_dict,
+            },
+        )
         logger.info(f"Signal emitted: {signal_type.value} → {target_agent}")
 
     if conn is not None:

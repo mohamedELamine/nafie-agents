@@ -2,9 +2,11 @@ import os
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
+from core.contracts import EVENT_ANALYTICS_SIGNAL, STREAM_ANALYTICS_SIGNALS
 from ..db import pattern_store
 from ..db import signal_store
 from ..db import report_store
+from ..db.connection import get_conn
 from ..logging_config import get_logger
 from ..models import SignalType, SignalPriority, AttributionConfidence
 from ..services.redis_bus import get_redis_bus
@@ -72,7 +74,7 @@ def emit_immediate_signal(
     try:
         signal = create_signal(
             signal_type=signal_type,
-            priority=SignalPriority.DAILY,
+            priority=SignalPriority.IMMEDIATE,
             target_agent=target_agent,
             theme_slug=theme_slug,
             confidence=0.6,
@@ -92,23 +94,45 @@ def send_to_target_agent(signal: Any) -> None:
     try:
         redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
         redis_bus = get_redis_bus(redis_url=redis_url)
+        signal_dict = {
+            "signal_id": signal.signal_id,
+            "signal_type": signal.signal_type.value,
+            "priority": signal.priority.value,
+            "target_agent": signal.target_agent,
+            "theme_slug": signal.theme_slug,
+            "data": signal.data,
+            "generated_at": signal.generated_at.isoformat(),
+        }
 
-        # Law III: check signal_sent_recently() before sending
-        if signal_store.signal_sent_recently(
-            redis_bus.client,
-            signal.signal_id,
-        ):
-            logger.debug(f"Signal already sent recently, skipping: {signal.signal_id}")
-            return
+        with get_conn() as conn:
+            if signal_store.signal_sent_recently(
+                conn,
+                signal.signal_type.value,
+                signal.theme_slug,
+            ):
+                logger.debug(f"Signal already sent recently, skipping: {signal.signal_id}")
+                return
 
-        # Publish to agent-specific channel
-        channel = f"agent:{signal.target_agent}:signals"
-        redis_bus.publish(channel, signal.__dict__)
+            signal_store.save_signal(
+                conn,
+                {
+                    **signal_dict,
+                    "confidence": signal.confidence,
+                    "channel": signal.channel,
+                    "recommendation": signal.recommendation,
+                    "supporting_pattern_id": signal.supporting_pattern_id,
+                    "sent_at": None,
+                },
+            )
+            signal_store.mark_signal_sent(conn, signal.signal_id)
 
-        # Mark as sent
-        signal_store.mark_signal_sent(
-            redis_bus.client,
-            signal.signal_id,
+        redis_bus.publish_stream(
+            STREAM_ANALYTICS_SIGNALS,
+            {
+                "event_type": EVENT_ANALYTICS_SIGNAL,
+                "source": "analytics_agent",
+                **signal_dict,
+            },
         )
 
         logger.debug(f"Sent signal to {signal.target_agent}: {signal.signal_id}")

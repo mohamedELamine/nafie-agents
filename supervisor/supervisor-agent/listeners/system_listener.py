@@ -1,8 +1,6 @@
 import logging
 import asyncio
-from typing import Optional, Dict, Any
-import json
-from datetime import datetime
+from models import AgentHealthStatus
 from redis_bus import redis_bus
 from workflows.health_monitor import health_monitor
 from workflows.orchestrator import orchestrator
@@ -12,8 +10,9 @@ logger = logging.getLogger("supervisor.system_listener")
 
 
 class SystemListener:
-    def __init__(self):
+    def __init__(self, resend_client=None):
         self.running = False
+        self.resend = resend_client
 
     async def start(self):
         """Start listening for system events"""
@@ -149,11 +148,11 @@ class SystemListener:
             if resolution:
                 # Log resolution
                 conflict_resolver.record_resolution(
-                    conflict_id=conflict["conflict_id"], resolution=resolution
+                    conflict_id=conflict.conflict_id, resolution=resolution
                 )
 
                 # Escalate if needed
-                if conflict["escalated"] or not resolution:
+                if conflict.escalated or not resolution:
                     await conflict_resolver.escalate_ambiguous(conflict)
 
         except Exception as e:
@@ -166,11 +165,15 @@ class SystemListener:
             new_status = data.get("status")
 
             if agent_name and new_status:
-                health = health_monitor._check_agent_health(agent_name)
-                health.status = agent_name  # This is a simplification
+                health = await health_monitor._check_agent_health(agent_name)
+                try:
+                    health.status = AgentHealthStatus(new_status)
+                except ValueError:
+                    logger.warning(f"Unknown agent status for {agent_name}: {new_status}")
+                    return
 
                 # Apply degraded mode
-                health_monitor.apply_degraded_mode(agent_name, agent_name)
+                health_monitor.apply_degraded_mode(agent_name, health.status)
 
         except Exception as e:
             logger.error(f"Error handling agent status: {e}")
@@ -181,8 +184,11 @@ class SystemListener:
             alert_type = data.get("alert_type")
             details = data.get("details", {})
 
-            if alert_type and "resend" in globals():
-                await resend.send_critical_system_alert(alert_type=alert_type, details=details)
+            if alert_type and self.resend:
+                await self.resend.send_critical_system_alert(
+                    alert_type=alert_type,
+                    details=details,
+                )
 
         except Exception as e:
             logger.error(f"Error handling system alert: {e}")

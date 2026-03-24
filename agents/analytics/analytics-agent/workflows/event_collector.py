@@ -6,6 +6,13 @@ import os
 from datetime import datetime
 from typing import Any, Dict
 
+from core.contracts import (
+    STREAM_BUILDER_EVENTS,
+    STREAM_CONTENT_EVENTS,
+    STREAM_MARKETING_EVENTS,
+    STREAM_PRODUCT_EVENTS,
+    STREAM_SUPPORT_EVENTS,
+)
 from ..db import event_store
 from ..db.connection import get_conn
 from ..logging_config import get_logger
@@ -16,11 +23,11 @@ logger = get_logger("workflows.event_collector")
 
 # قنوات Redis المُستمَع عليها
 INBOUND_STREAMS = [
-    "product-events",
-    "support-events",
-    "marketing-events",
-    "content-events",
-    "builder-events",
+    STREAM_PRODUCT_EVENTS,
+    STREAM_SUPPORT_EVENTS,
+    STREAM_MARKETING_EVENTS,
+    STREAM_CONTENT_EVENTS,
+    STREAM_BUILDER_EVENTS,
 ]
 
 CONSUMER_GROUP = "analytics-agent"

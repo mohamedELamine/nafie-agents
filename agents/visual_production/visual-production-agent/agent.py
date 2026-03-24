@@ -207,6 +207,7 @@ async def complete_approved_pipeline(
     theme_slug: str,
     version: str,
     processed_result: Dict[str, Any],
+    owner_email: str = "",
 ) -> Dict[str, Any]:
     """
     Continue the pipeline after human approval.
@@ -233,8 +234,17 @@ async def complete_approved_pipeline(
     final_result = await agent.manifest_builder(
         batch_id=batch_id,
         theme_slug=theme_slug,
-        approved_assets=processed_result,
+        approved_assets={"assets": publish_result["assets"]},
     )
+
+    if owner_email:
+        await agent.resend.send_batch_complete(
+            to_email=owner_email,
+            batch_id=batch_id,
+            theme_slug=theme_slug,
+            approved_count=len(publish_result["assets"]),
+            rejected_count=0,
+        )
 
     logger.info(f"Visual pipeline completed — batch {batch_id}")
     return final_result

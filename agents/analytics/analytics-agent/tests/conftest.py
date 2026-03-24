@@ -8,7 +8,10 @@ from unittest.mock import MagicMock, patch
 from datetime import datetime, timezone
 
 # Make the analytics-agent package importable
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_AGENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_ROOT_DIR  = os.path.abspath(os.path.join(_AGENT_DIR, "..", "..", ".."))
+sys.path.insert(0, _AGENT_DIR)
+sys.path.insert(0, _ROOT_DIR)  # يجعل `core.contracts` قابلاً للاستيراد
 
 
 # ─── DB connection mock ──────────────────────────────────────────────────────

@@ -1,5 +1,3 @@
-version: "3.9"
-
 # ══════════════════════════════════════════════════════════════
 # منظومة قوالب WordPress العربية — Docker Compose
 # تشغيل: docker-compose up -d
@@ -75,6 +73,29 @@ services:
       timeout: 10s
       retries: 3
 
+  supervisor_api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ar_themes_supervisor_api
+    restart: unless-stopped
+    environment:
+      AGENT_NAME:          supervisor_api
+      REDIS_URL:           redis://redis:6379
+      DATABASE_URL:        postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB}
+      ANTHROPIC_API_KEY:   ${ANTHROPIC_API_KEY}
+      LANGSMITH_API_KEY:   ${LANGSMITH_API_KEY}
+      LANGSMITH_PROJECT:   ${LANGSMITH_PROJECT:-ar-themes-ecosystem}
+      TELEGRAM_BOT_TOKEN:  ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHAT_ID:    ${TELEGRAM_CHAT_ID}
+      LOG_LEVEL:           ${LOG_LEVEL:-INFO}
+    command: uvicorn supervisor.api:app --host 0.0.0.0 --port 8001
+    depends_on:
+      redis:    { condition: service_healthy }
+      postgres: { condition: service_healthy }
+    volumes:
+      - ./:/app
+
   # ── وكيل المنصة ─────────────────────────────────────────────
 
   platform:
@@ -95,7 +116,7 @@ services:
       WP_API_PASSWORD:      ${WP_API_PASSWORD}
       # --- Infrastructure ---
       REDIS_URL:            redis://redis:6379
-      DATABASE_URL:         postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/platform_db
+      DATABASE_URL:         postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB}
       # --- Email ---
       RESEND_API_KEY:       ${RESEND_API_KEY}
       STORE_EMAIL_FROM:     ${STORE_EMAIL_FROM:-نافع <hello@nafic.com>}
@@ -253,28 +274,6 @@ services:
       - ./:/app
       - visuals:/app/visuals
 
-  # ── واجهة API ────────────────────────────────────────────────
-
-  api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: ar_themes_api
-    restart: unless-stopped
-    ports:
-      - "8000:8000"
-    environment:
-      REDIS_URL:         redis://redis:6379
-      DATABASE_URL:      postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-      LOG_LEVEL:         ${LOG_LEVEL:-INFO}
-    command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
-    depends_on:
-      redis:    { condition: service_healthy }
-      postgres: { condition: service_healthy }
-    volumes:
-      - ./:/app
-
   # ── Nginx ────────────────────────────────────────────────────
 
   nginx:
@@ -288,7 +287,8 @@ services:
       - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf
       - ./infrastructure/nginx/ssl:/etc/nginx/ssl
     depends_on:
-      - api
+      - platform
+      - supervisor_api
 
 # ══════════════════════════════════════════════════════════════
 # الأحجام المستمرة

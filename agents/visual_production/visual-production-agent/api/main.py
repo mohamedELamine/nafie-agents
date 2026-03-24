@@ -14,10 +14,34 @@ from fastapi.responses import JSONResponse
 # Ensure the agent root is on sys.path for `uvicorn api.main:app`.
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from db import get_conn, get_manifest, init_pool, close_pool
+from db import (
+    close_pool,
+    get_conn,
+    get_manifest,
+    init_pool,
+    update_manifest_status,
+)
 from logging_config import get_logger
 
 logger = get_logger("api.main")
+
+VALID_REVIEW_DECISIONS = {"approved", "rejected", "needs_revision"}
+
+
+async def _get_review_checkpoint(redis_bus, batch_key: str) -> Dict[str, Any]:
+    checkpoint = await redis_bus.checkpoint_get(f"visual_review:{batch_key}")
+    if not checkpoint:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Review checkpoint for batch {batch_key!r} not found",
+        )
+    return checkpoint
+
+
+async def _finalize_non_approved_review(redis_bus, batch_key: str, status: str, notes: str) -> None:
+    with get_conn() as conn:
+        update_manifest_status(conn, batch_key, status=status, notes=notes or None)
+    await redis_bus.checkpoint_delete(f"visual_review:{batch_key}")
 
 
 @asynccontextmanager
@@ -83,8 +107,9 @@ async def handle_review_decision(
     decision.notes:    optional string
     """
     decision_type = decision.get("decision", "").lower()
+    notes = decision.get("notes", "")
 
-    if decision_type not in ("approved", "rejected", "needs_revision"):
+    if decision_type not in VALID_REVIEW_DECISIONS:
         raise HTTPException(
             status_code=400,
             detail=f"Invalid decision type: {decision_type!r}",
@@ -92,11 +117,42 @@ async def handle_review_decision(
 
     logger.info(f"Review decision for {batch_key}: {decision_type}")
 
-    # TODO: trigger downstream pipeline step based on decision_type
+    from agent import build_visual_agent, complete_approved_pipeline
+
+    agent = build_visual_agent()
+    checkpoint = await _get_review_checkpoint(agent.redis, batch_key)
+
+    if decision_type == "approved":
+        result = await complete_approved_pipeline(
+            agent=agent,
+            batch_id=batch_key,
+            theme_slug=checkpoint.get("theme_slug", ""),
+            version=checkpoint.get("version", "1.0"),
+            processed_result={
+                "processed": checkpoint.get("assets", {}),
+                "total_size_kb": checkpoint.get("total_size_kb", 0),
+            },
+            owner_email=checkpoint.get("owner_email", ""),
+        )
+        await agent.redis.checkpoint_delete(f"visual_review:{batch_key}")
+        return {
+            "status": decision_type,
+            "batch_key": batch_key,
+            "message": "Batch approved and published",
+            "result": result,
+        }
+
+    await _finalize_non_approved_review(
+        agent.redis,
+        batch_key,
+        status=decision_type,
+        notes=notes,
+    )
     return {
         "status": decision_type,
         "batch_key": batch_key,
         "message": f"Batch {decision_type}",
+        "notes": notes,
     }
 
 

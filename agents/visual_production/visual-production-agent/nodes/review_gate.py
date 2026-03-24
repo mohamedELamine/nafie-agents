@@ -29,6 +29,7 @@ class ReviewGateNode:
                 "batch_id": batch_id,
                 "theme_slug": theme_slug,
                 "version": version,
+                "owner_email": owner_email,
                 "assets": processed_assets.get("processed", {}),
                 "total_size_kb": processed_assets.get("total_size_kb", 0),
             },

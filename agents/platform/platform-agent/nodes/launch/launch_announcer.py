@@ -5,9 +5,10 @@ Node: LAUNCH_ANNOUNCER — T052
 """
 from __future__ import annotations
 import logging
+from core.contracts import EVENT_NEW_PRODUCT_LIVE, STREAM_PRODUCT_EVENTS
 from db.idempotency import check_completed, mark_completed, mark_started
 from db.registry import ProductRegistry
-from services.redis_bus import RedisBus, STREAM_PRODUCT_EVENTS
+from services.redis_bus import RedisBus
 from services.resend_client import ResendClient
 from state import LaunchState, PlatformStatus
 
@@ -33,13 +34,15 @@ def make_launch_announcer_node(
 
         # ── 1. إطلاق NEW_PRODUCT_LIVE على Redis Stream ──────
         event = redis_bus.build_event(
-            event_type="NEW_PRODUCT_LIVE",
+            event_type=EVENT_NEW_PRODUCT_LIVE,
             data={
                 "theme_slug": theme_slug,
                 "theme_name_ar": theme_name_ar,
+                "version": state.get("version", "1.0.0"),
                 "wp_post_url": wp_post_url,
                 "ls_product_id": ls_product_id,
                 "pricing": {"single": 29, "unlimited": 79, "vip": 299},
+                "theme_contract": state.get("theme_contract", {}),
                 "launched_at": __import__("datetime").datetime.utcnow().isoformat() + "Z",
             },
             correlation_id=state.get("approved_event_id"),

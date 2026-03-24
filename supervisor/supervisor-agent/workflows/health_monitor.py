@@ -4,6 +4,7 @@ from datetime import datetime
 from models import AgentHealthStatus, AgentHealthRecord
 from db.health_store import health_store
 from redis_bus import redis_bus
+from agent_registry import get_agent, get_degraded_action
 
 logger = logging.getLogger("supervisor.health_monitor")
 
@@ -16,7 +17,7 @@ class HealthMonitor:
     async def check_all_agents(self) -> Dict[str, AgentHealthRecord]:
         """Check health of all agents"""
         try:
-            from agent_registry import AGENT_REGISTRY, get_degraded_action
+            from agent_registry import AGENT_REGISTRY
 
             all_health = {}
 
@@ -149,8 +150,6 @@ class HealthMonitor:
     def apply_degraded_mode(self, agent_name: str, health_status: AgentHealthStatus):
         """Apply degraded mode for agent"""
         try:
-            from agent_registry import get_degraded_action
-
             degraded_action = get_degraded_action(agent_name)
 
             if degraded_action:

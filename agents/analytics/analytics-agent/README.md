@@ -1,6 +1,6 @@
 # Analytics Agent
 
-وكيل تحليل يعمل كطبقة استخبارات تشغيلية للمنظومة: يجمع الأحداث، يحوّلها إلى مقاييس بـ granularity محدد، يستخرج نمطين (Operational + Business)، يُولّد إشارات للوكلاء وتنبيهات لصاحب المشروع — معالجة Real-time للإشارات العاجلة وBatch للقياس العميق. **لا يُغيّر شيئاً بنفسه.**
+وكيل تحليل يعمل كطبقة استخبارات تشغيلية للمنظومة: يجمع الأحداث، يحوّلها إلى مقاييس بـ granularity محدد، يستخرج أنماطًا تشغيلية وتجارية، ويولّد إشارات للوكلاء وتنبيهات لصاحب المشروع. لا يغيّر الأنظمة المصدرية مباشرة، لكنه يكتب إلى جداول التحليل الخاصة به ويصدر إشارات مشتركة عبر Redis Streams.
 
 ## Architecture
 
@@ -56,7 +56,7 @@ agents/analytics/analytics-agent/
 ### Layer 1: Event Collector + Immediate Evaluator
 - **Frequency**: Real-time + every 15 minutes
 - **Purpose**: Process incoming events + micro-checks
-- **Actions**: Store events, attribute sales, emit immediate signals
+- **Actions**: Store events, attribute sales, emit immediate signals to `analytics:signals`
 
 ### Layer 2: Metrics Engine
 - **Frequency**: Every hour
@@ -71,7 +71,26 @@ agents/analytics/analytics-agent/
 ### Layer 4: Signal Generator + Reports
 - **Frequency**: Daily + Weekly
 - **Purpose**: Generate signals + reports
-- **Actions**: Emit signals to agents, send reports to owner
+- **Actions**: Emit signals to agents via shared stream, send reports to owner
+
+## Shared Contracts
+
+### Inbound Streams
+- `product-events`
+- `support-events`
+- `marketing-events`
+- `content-events`
+- `asset-events`
+
+### Outbound Streams
+- `analytics:signals`
+
+### Shared Event Types
+- `ANALYTICS_SIGNAL`
+- `CONTENT_PRODUCED`
+- `POST_PUBLISHED`
+- `CAMPAIGN_LAUNCHED`
+- `THEME_ASSETS_READY`
 
 ## Signal Types
 
@@ -122,6 +141,9 @@ psql -U analytics -d analytics_db -f db/migrations/001_analytics_tables.sql
 # Start scheduler (main process)
 python scheduler.py
 
+# Or from the repository root
+python agents/analytics/agent.py
+
 # Or run as API
 uvicorn api.main:app --host 0.0.0.0 --port 8000
 ```
@@ -170,7 +192,7 @@ ATTRIBUTION_WINDOW_DAYS=7
 
 The analytics agent operates under these core principles:
 
-1. **Read-Only**: Never writes to data, only reads
+1. **No Upstream Mutation**: Never mutates source systems, but writes its own events, metrics, patterns, and signals
 2. **occurred_at for Analysis**: Always use occurred_at for calculations
 3. **Lemon Squeezy is Truth**: Reconciliation is mandatory, Lemon Squeezy wins
 4. **Attribution is Approximation**: Always declare confidence
@@ -189,6 +211,11 @@ The analytics agent operates under these core principles:
 - `attribution_records` - Sale attribution
 - `signal_outcomes` - Signal feedback
 - `weekly_reports` - Weekly reports
+
+## Notes
+
+- `emit_immediate_signal()` now preserves immediate priority for urgent alerts such as reconciliation mismatches.
+- Shared delivery to downstream agents happens through `send_to_target_agent()` on the `analytics:signals` stream.
 
 ## License
 

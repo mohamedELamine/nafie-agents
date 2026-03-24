@@ -1,32 +1,28 @@
 import logging
+import os
 from typing import Optional
 from datetime import datetime
 import uuid
 from models import WorkflowInstance, WorkflowStatus, WorkflowStep, WorkflowType, SupervisorAuditLog
 from policy_engine import evaluate_policies, check_user_locked
+from db.connection import coerce_datetime, ensure_connection
 
 logger = logging.getLogger("supervisor.workflow_store")
 
 
 class WorkflowStore:
-    def __init__(self, db_url: str):
+    def __init__(self, db_url: Optional[str] = None):
         self.db_url = db_url
-        self._connect()
+        self.conn = None
 
     def _connect(self):
         """Initialize database connection"""
-        try:
-            import psycopg2
-
-            self.conn = psycopg2.connect(self.db_url)
-            self.conn.autocommit = False
-        except Exception as e:
-            logger.error(f"Database connection failed: {e}")
-            raise
+        self.conn = ensure_connection(self.conn, self.db_url)
 
     def save(self, instance: WorkflowInstance) -> WorkflowInstance:
         """Save workflow instance to database"""
         try:
+            self._connect()
             with self.conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -68,6 +64,7 @@ class WorkflowStore:
     def get(self, instance_id: str) -> Optional[WorkflowInstance]:
         """Get workflow instance by ID"""
         try:
+            self._connect()
             with self.conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -89,6 +86,7 @@ class WorkflowStore:
     def get_by_business_key(self, business_key: str) -> Optional[WorkflowInstance]:
         """Get workflow by business key"""
         try:
+            self._connect()
             with self.conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -115,6 +113,7 @@ class WorkflowStore:
     ) -> list[WorkflowInstance]:
         """Get all active workflows"""
         try:
+            self._connect()
             with self.conn.cursor() as cursor:
                 if status:
                     cursor.execute("""
@@ -139,6 +138,7 @@ class WorkflowStore:
     def list_by_status(self, status: WorkflowStatus) -> list[WorkflowInstance]:
         """List workflows by status"""
         try:
+            self._connect()
             with self.conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -159,6 +159,7 @@ class WorkflowStore:
     def update_step(self, instance_id: str, step: WorkflowStep) -> bool:
         """Update workflow step"""
         try:
+            self._connect()
             with self.conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -200,8 +201,8 @@ class WorkflowStore:
             current_step=row[5],
             total_steps=row[6],
             status=WorkflowStatus(row[7]),
-            started_at=datetime.fromisoformat(row[8]) if row[8] else None,
-            completed_at=datetime.fromisoformat(row[9]) if row[9] else None,
+            started_at=coerce_datetime(row[8]),
+            completed_at=coerce_datetime(row[9]),
             failed_step=row[10],
             failure_reason=row[11],
             retry_count=row[12],
@@ -210,4 +211,4 @@ class WorkflowStore:
         )
 
 
-workflow_store = WorkflowStore(db_url="")
+workflow_store = WorkflowStore(db_url=os.environ.get("DATABASE_URL"))

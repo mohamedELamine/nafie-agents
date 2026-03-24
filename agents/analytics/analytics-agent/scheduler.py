@@ -8,6 +8,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from ..logging_config import configure_logging, get_logger
+from .db.connection import close_pool, init_pool, is_pool_initialized
 from .workflows.immediate_evaluator import ImmediateEvaluator
 from .workflows.metrics_engine import (
     metrics_engine_batch,
@@ -29,12 +30,17 @@ class AnalyticsScheduler:
         self.scheduler = AsyncIOScheduler(timezone="UTC")
         self.immediate_evaluator = ImmediateEvaluator()
         self.running = False
+        self._owns_db_pool = False
 
     async def start(self) -> None:
         """Start the scheduler."""
         try:
             # Configure logging
             configure_logging(os.getenv("LOG_LEVEL", "INFO"))
+
+            if not is_pool_initialized():
+                init_pool(minconn=2, maxconn=10)
+                self._owns_db_pool = True
 
             # Add jobs
             self._add_jobs()
@@ -189,6 +195,9 @@ class AnalyticsScheduler:
             if self.scheduler.running:
                 self.scheduler.shutdown()
             self.running = False
+            if self._owns_db_pool:
+                close_pool()
+                self._owns_db_pool = False
             logger.info("Analytics scheduler stopped")
         except Exception as e:
             logger.error(f"Error stopping scheduler: {e}")
@@ -197,6 +206,9 @@ class AnalyticsScheduler:
 def start_scheduler() -> AnalyticsScheduler:
     """Create, configure, and start the analytics scheduler. Returns the instance."""
     scheduler = AnalyticsScheduler()
+    if not is_pool_initialized():
+        init_pool(minconn=2, maxconn=10)
+        scheduler._owns_db_pool = True
     scheduler._add_jobs()
     scheduler.scheduler.start()
     scheduler.running = True

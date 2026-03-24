@@ -19,7 +19,10 @@ class PhoneUpdaterNode:
             )
             return state
 
-        self.helpscout.reply(ticket_id=ticket["ticket_id"], body=answer["answer_text"])
+        self.helpscout.reply(
+            conversation_id=ticket["ticket_id"],
+            body=answer["answer_text"],
+        )
 
         state["ticket"]["updated"] = True
 

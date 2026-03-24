@@ -1,31 +1,27 @@
 import logging
+import os
 from typing import Optional
 from datetime import datetime
 import uuid
 from models import PolicyRule
+from db.connection import coerce_datetime, ensure_connection
 
 logger = logging.getLogger("supervisor.policy_store")
 
 
 class PolicyStore:
-    def __init__(self, db_url: str):
+    def __init__(self, db_url: Optional[str] = None):
         self.db_url = db_url
-        self._connect()
+        self.conn = None
 
     def _connect(self):
         """Initialize database connection"""
-        try:
-            import psycopg2
-
-            self.conn = psycopg2.connect(self.db_url)
-            self.conn.autocommit = False
-        except Exception as e:
-            logger.error(f"Database connection failed: {e}")
-            raise
+        self.conn = ensure_connection(self.conn, self.db_url)
 
     def save_policy(self, policy: PolicyRule) -> PolicyRule:
         """Save policy rule"""
         try:
+            self._connect()
             with self.conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -66,6 +62,7 @@ class PolicyStore:
     def get_active_policies(self) -> list[PolicyRule]:
         """Get all active policies"""
         try:
+            self._connect()
             with self.conn.cursor() as cursor:
                 cursor.execute("""
                     SELECT * FROM policy_rules
@@ -82,6 +79,7 @@ class PolicyStore:
     def deactivate_policy(self, policy_id: str) -> bool:
         """Deactivate a policy"""
         try:
+            self._connect()
             with self.conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -105,6 +103,7 @@ class PolicyStore:
     def get_policy_history(self, policy_id: str) -> list[dict]:
         """Get policy history"""
         try:
+            self._connect()
             with self.conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -133,9 +132,9 @@ class PolicyStore:
             action=row[3],
             value=row[4],
             active=row[5],
-            created_at=datetime.fromisoformat(row[6]) if row[6] else None,
-            expires_at=datetime.fromisoformat(row[7]) if row[7] else None,
+            created_at=coerce_datetime(row[6]),
+            expires_at=coerce_datetime(row[7]),
         )
 
 
-policy_store = PolicyStore(db_url="")
+policy_store = PolicyStore(db_url=os.environ.get("DATABASE_URL"))

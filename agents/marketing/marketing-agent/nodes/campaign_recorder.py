@@ -1,6 +1,11 @@
 from datetime import datetime
 from typing import Any, Dict
 
+from core.contracts import (
+    EVENT_CAMPAIGN_LAUNCHED,
+    EVENT_POST_PUBLISHED,
+    STREAM_MARKETING_EVENTS,
+)
 from ..db import marketing_calendar, campaign_log
 from ..db.connection import get_conn
 from ..services.redis_bus import RedisBus
@@ -80,6 +85,17 @@ def make_campaign_recorder_node(redis: RedisBus) -> callable:
                     campaign_log.save_log(conn, event)
                     events.append(event)
 
+                    if status == "published":
+                        redis.publish_stream(
+                            STREAM_MARKETING_EVENTS,
+                            redis.build_event(
+                                event_type=EVENT_POST_PUBLISHED,
+                                campaign_id=state.current_campaign.campaign_id,
+                                theme_slug=state.current_campaign.theme_slug,
+                                data=event["details"],
+                            ),
+                        )
+
                 # Determine final campaign status
                 published = sum(1 for p in scheduled_posts if p.get("status") == "published")
                 failed    = sum(1 for p in scheduled_posts if p.get("status") == "failed")
@@ -110,12 +126,13 @@ def make_campaign_recorder_node(redis: RedisBus) -> callable:
             # Emit CAMPAIGN_LAUNCHED to Redis if any post was published
             published_events = [e for e in events if e["event_type"] == "POST_PUBLISHED"]
             if published_events:
-                redis.publish(
-                    "marketing:events",
+                redis.publish_stream(
+                    STREAM_MARKETING_EVENTS,
                     redis.build_event(
-                        event_type  = "CAMPAIGN_LAUNCHED",
-                        campaign_id = state.current_campaign.campaign_id,
-                        data        = {"published_posts": len(published_events)},
+                        event_type=EVENT_CAMPAIGN_LAUNCHED,
+                        campaign_id=state.current_campaign.campaign_id,
+                        theme_slug=state.current_campaign.theme_slug,
+                        data={"published_posts": len(published_events)},
                     ),
                 )
 

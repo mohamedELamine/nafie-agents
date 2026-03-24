@@ -1,6 +1,6 @@
 from enum import Enum
 from dataclasses import dataclass, field
-from typing import Dict, Set
+from typing import Dict, Optional
 
 
 class WorkflowType(str, Enum):
@@ -94,10 +94,10 @@ class ConflictRecord:
     conflict_type: ConflictType
     agents_involved: list[str]
     description: str
+    created_at: str = ""
     resolution: Optional[str] = None
     resolved_at: Optional[str] = None
     escalated: bool = False
-    created_at: str
 
 
 @dataclass

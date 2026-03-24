@@ -7,6 +7,10 @@ from logging_config import configure_logging, get_logger
 from redis_bus import RedisBus
 from listeners.system_listener import SystemListener
 from listeners.command_listener import CommandListener
+from services.resend_client import ResendClient
+from workflows.health_monitor import health_monitor
+from workflows.conflict_resolver import conflict_resolver
+from workflows.orchestrator import orchestrator
 
 load_dotenv()
 
@@ -28,7 +32,7 @@ class Supervisor:
         self.redis = redis_bus
         self.db_url = db_url
         self.resend_api_key = resend_api_key
-        self.resend = None  # Will be initialized in initialize()
+        self.resend = None
         self.owner_email = owner_email
         self.heartbeat_timeout = heartbeat_timeout_sec
         self.health_check_interval = health_check_interval_sec
@@ -42,13 +46,12 @@ class Supervisor:
         try:
             logger.info("Initializing supervisor agent...")
 
-            # Import and initialize clients
-            import resend
-            from workflows.health_monitor import health_monitor
-            from workflows.conflict_resolver import conflict_resolver
-            from db.audit_store import audit_store
-
-            self.resend = resend.Resend(api_key=self.resend_api_key)
+            self.resend = ResendClient(api_key=self.resend_api_key)
+            orchestrator.resend = self.resend
+            health_monitor.resend = self.resend
+            conflict_resolver.resend = self.resend
+            self.system_listener.resend = self.resend
+            self.command_listener.resend = self.resend
 
             # Set up error handlers
             self._setup_error_handlers()
@@ -125,6 +128,9 @@ async def main():
     """Main entry point"""
     try:
         redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+        database_url = os.getenv("DATABASE_URL")
+        if not database_url:
+            raise RuntimeError("DATABASE_URL environment variable is not set")
         bus = RedisBus(
             host=redis_url.split("://")[1].split(":")[0] if "://" in redis_url else "localhost",
             port=int(redis_url.split(":")[-1]) if ":" in redis_url.split("://")[-1] else 6379,
@@ -133,9 +139,7 @@ async def main():
         # Initialize supervisor
         supervisor = Supervisor(
             redis_bus=bus,
-            db_url=os.getenv(
-                "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/supervisor"
-            ),
+            db_url=database_url,
             resend_api_key=os.getenv("RESEND_API_KEY", ""),
             owner_email=os.getenv("OWNER_EMAIL", "admin@example.com"),
             heartbeat_timeout_sec=int(os.getenv("HEARTBEAT_TIMEOUT_SEC", "120")),

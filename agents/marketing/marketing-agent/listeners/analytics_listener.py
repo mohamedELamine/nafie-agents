@@ -1,11 +1,24 @@
+import os
 from datetime import datetime
 from typing import Any, Dict
 
+import psycopg2
+
+from core.contracts import STREAM_ANALYTICS_SIGNALS
 from ..db import campaign_log
 from ..services import get_redis_bus
 from ..logging_config import get_logger
 
 logger = get_logger("listeners.analytics_listener")
+
+
+def _connect():
+    dsn = (
+        os.environ.get("MARKETING_DATABASE_URL")
+        or os.environ.get("DATABASE_URL")
+        or "postgresql://marketing:password@localhost:5432/marketing_db"
+    )
+    return psycopg2.connect(dsn)
 
 
 def make_analytics_listener(redis) -> callable:
@@ -17,7 +30,7 @@ def make_analytics_listener(redis) -> callable:
             redis_bus = get_redis_bus(redis_url="redis://localhost:6379/0")
 
             messages = redis_bus.read_group(
-                stream="analytics:signals",
+                stream=STREAM_ANALYTICS_SIGNALS,
                 consumer_name="analytics_listener",
                 count=10,
                 block_ms=1000,
@@ -29,10 +42,10 @@ def make_analytics_listener(redis) -> callable:
                 signal_type = message.get("signal_type")
                 data = message.get("data", {})
 
-                if signal_type in ["best_post_time", "best_format", "engagement_peak"]:
+                if signal_type in ["best_time", "best_channel"]:
                     logger.info(
                         f"ANALYTICS_SIGNAL (AUTO_APPLICABLE) received: {signal_type} "
-                        f"for campaign {message.get('campaign_id', 'unknown')}"
+                        f"for theme {message.get('theme_slug', 'unknown')}"
                     )
 
                     # Log the event
@@ -46,13 +59,11 @@ def make_analytics_listener(redis) -> callable:
                         },
                     }
 
-                    conn = __import__("psycopg2").connect(
-                        "postgresql://marketing:password@localhost:5432/marketing_db"
-                    )
+                    conn = _connect()
                     campaign_log.save_log(conn, log_entry)
                     conn.close()
 
-                redis_bus.ack("analytics:signals", message_id)
+                redis_bus.ack(STREAM_ANALYTICS_SIGNALS, message_id)
 
         except Exception as e:
             logger.error(f"Error in analytics listener: {e}")

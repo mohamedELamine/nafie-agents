@@ -17,6 +17,13 @@ from datetime import datetime
 from typing import Optional
 
 from agent import run_content_pipeline
+from core.contracts import (
+    EVENT_CONTENT_REQUEST,
+    EVENT_NEW_PRODUCT_LIVE,
+    EVENT_THEME_UPDATED_LIVE,
+    STREAM_CONTENT_EVENTS,
+    STREAM_PRODUCT_EVENTS,
+)
 from models import (
     CONTENT_CATEGORY_MAP, ContentRequest, ContentTrigger, ContentType,
     parse_evidence_contract,
@@ -44,8 +51,8 @@ class ContentListener:
 
     def start(self) -> None:
         """يبدأ الاستماع على product-events و content-events."""
-        self._redis.ensure_consumer_group("product-events",  CONSUMER_GROUP)
-        self._redis.ensure_consumer_group("content-events",  CONSUMER_GROUP)
+        self._redis.ensure_consumer_group(STREAM_PRODUCT_EVENTS, CONSUMER_GROUP)
+        self._redis.ensure_consumer_group(STREAM_CONTENT_EVENTS, CONSUMER_GROUP)
         self._running = True
         logger.info("content_listener.started")
         self._listen_loop()
@@ -57,8 +64,8 @@ class ContentListener:
     def _listen_loop(self) -> None:
         while self._running:
             try:
-                self._poll_stream("product-events")
-                self._poll_stream("content-events")
+                self._poll_stream(STREAM_PRODUCT_EVENTS)
+                self._poll_stream(STREAM_CONTENT_EVENTS)
             except Exception as exc:
                 logger.error("content_listener.loop_error err=%s", exc)
 
@@ -86,13 +93,13 @@ class ContentListener:
     def _dispatch(self, event: dict) -> None:
         event_type = event.get("event_type", "")
 
-        if event_type == "NEW_PRODUCT_LIVE":
+        if event_type == EVENT_NEW_PRODUCT_LIVE:
             self._on_new_product_live(event)
-        elif event_type == "THEME_UPDATED_LIVE":
+        elif event_type == EVENT_THEME_UPDATED_LIVE:
             self._on_theme_updated_live(event)
         elif event_type == "RECURRING_ISSUE_DETECTED":
             self._on_recurring_issue_detected(event)
-        elif event_type == "CONTENT_REQUEST":
+        elif event_type == EVENT_CONTENT_REQUEST:
             self._on_content_request(event)
         else:
             logger.debug("content_listener.skip event_type=%s", event_type)

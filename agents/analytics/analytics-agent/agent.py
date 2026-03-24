@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 from core.base_agent import BaseAgent
 from core.state import AgentName, BusinessEvent, EventType
 
+from .db.connection import close_pool, init_pool, is_pool_initialized
 from .logging_config import get_logger
 from .workflows.signal_generator import generate_signals_from_patterns
 from .workflows.immediate_evaluator import ImmediateEvaluator
@@ -24,6 +25,21 @@ class AnalyticsAgent(BaseAgent):
     """Analytics agent — read-only, sends ANALYTICS_SIGNAL only."""
 
     agent_name = AgentName.ANALYTICS
+
+    def __init__(self):
+        super().__init__()
+        self._owns_db_pool = False
+
+    async def start(self) -> None:
+        if not is_pool_initialized():
+            init_pool(minconn=2, maxconn=10)
+            self._owns_db_pool = True
+        try:
+            await super().start()
+        finally:
+            if self._owns_db_pool and is_pool_initialized():
+                close_pool()
+                self._owns_db_pool = False
 
     async def setup_handlers(self) -> None:
         for event_type in [

@@ -1,31 +1,27 @@
 import logging
+import os
 from typing import Optional
 from datetime import datetime
 import uuid
 from models import ConflictRecord, ConflictType
+from db.connection import coerce_datetime, ensure_connection
 
 logger = logging.getLogger("supervisor.conflict_store")
 
 
 class ConflictStore:
-    def __init__(self, db_url: str):
+    def __init__(self, db_url: Optional[str] = None):
         self.db_url = db_url
-        self._connect()
+        self.conn = None
 
     def _connect(self):
         """Initialize database connection"""
-        try:
-            import psycopg2
-
-            self.conn = psycopg2.connect(self.db_url)
-            self.conn.autocommit = False
-        except Exception as e:
-            logger.error(f"Database connection failed: {e}")
-            raise
+        self.conn = ensure_connection(self.conn, self.db_url)
 
     def save_conflict(self, conflict: ConflictRecord) -> ConflictRecord:
         """Save conflict record"""
         try:
+            self._connect()
             with self.conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -63,6 +59,7 @@ class ConflictStore:
     def get_open_conflicts(self) -> list[ConflictRecord]:
         """Get all open conflicts"""
         try:
+            self._connect()
             with self.conn.cursor() as cursor:
                 cursor.execute("""
                     SELECT * FROM conflict_records
@@ -82,6 +79,7 @@ class ConflictStore:
     ) -> bool:
         """Resolve a conflict"""
         try:
+            self._connect()
             with self.conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -105,6 +103,7 @@ class ConflictStore:
     def get_conflict_history(self, conflict_id: str) -> list[dict]:
         """Get conflict history"""
         try:
+            self._connect()
             with self.conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -132,10 +131,10 @@ class ConflictStore:
             agents_involved=row[2],
             description=row[3],
             resolution=row[4],
-            resolved_at=datetime.fromisoformat(row[5]) if row[5] else None,
+            resolved_at=coerce_datetime(row[5]),
             escalated=row[6],
-            created_at=datetime.fromisoformat(row[7]) if row[7] else None,
+            created_at=coerce_datetime(row[7]),
         )
 
 
-conflict_store = ConflictStore(db_url="")
+conflict_store = ConflictStore(db_url=os.environ.get("DATABASE_URL"))

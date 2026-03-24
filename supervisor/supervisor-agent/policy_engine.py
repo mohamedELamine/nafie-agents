@@ -1,9 +1,9 @@
-from typing import Dict, List
+from typing import Any, Dict, List
 from dataclasses import dataclass
 from models import WorkflowInstance, WorkflowStatus, ConflictRecord, PolicyRule, AgentHealthRecord
 
 # Default policies
-DEFAULT_POLICIES: Dict[str, Dict[str, any]] = {
+DEFAULT_POLICIES: Dict[str, Dict[str, Any]] = {
     "daily_visual_budget": {
         "type": "budget_limit",
         "rule_type": "budget",
@@ -53,7 +53,7 @@ def check_user_locked(domain: str) -> bool:
     return domain in USER_LOCKED_DECISIONS
 
 
-def evaluate_policies(context: Dict[str, any]) -> List[PolicyRule]:
+def evaluate_policies(context: Dict[str, Any]) -> List[PolicyRule]:
     """Evaluate all active policies against context"""
     active_policies = []
 
@@ -96,7 +96,7 @@ def evaluate_policies(context: Dict[str, any]) -> List[PolicyRule]:
 
 def apply_budget_action(policy: PolicyRule, current_cost: float) -> str:
     """Apply budget-related policy actions"""
-    action = policy.get("action", "")
+    action = policy.action
 
     if action == "pause_visual_production":
         return "pause_visual_production"

@@ -1,27 +1,22 @@
 import logging
+import os
 from typing import Optional
 from datetime import datetime
 import uuid
 from models import SupervisorAuditLog, AuditCategory, EventEnvelope
+from db.connection import coerce_datetime, ensure_connection
 
 logger = logging.getLogger("supervisor.audit_store")
 
 
 class AuditStore:
-    def __init__(self, db_url: str):
+    def __init__(self, db_url: Optional[str] = None):
         self.db_url = db_url
-        self._connect()
+        self.conn = None
 
     def _connect(self):
         """Initialize database connection"""
-        try:
-            import psycopg2
-
-            self.conn = psycopg2.connect(self.db_url)
-            self.conn.autocommit = False
-        except Exception as e:
-            logger.error(f"Database connection failed: {e}")
-            raise
+        self.conn = ensure_connection(self.conn, self.db_url)
 
     def write_audit(
         self,
@@ -35,6 +30,7 @@ class AuditStore:
     ) -> str:
         """Write audit log entry - never delete"""
         try:
+            self._connect()
             with self.conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -74,6 +70,7 @@ class AuditStore:
     ) -> list[SupervisorAuditLog]:
         """Get audit log with optional filtering"""
         try:
+            self._connect()
             with self.conn.cursor() as cursor:
                 if category and since:
                     cursor.execute(
@@ -128,8 +125,8 @@ class AuditStore:
             correlation_id=row[5],
             details=row[6],
             outcome=row[7],
-            created_at=datetime.fromisoformat(row[8]) if row[8] else None,
+            created_at=coerce_datetime(row[8]),
         )
 
 
-audit_store = AuditStore(db_url="")
+audit_store = AuditStore(db_url=os.environ.get("DATABASE_URL"))

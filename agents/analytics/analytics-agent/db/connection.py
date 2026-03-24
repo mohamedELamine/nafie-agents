@@ -18,6 +18,8 @@ _pool: pool.SimpleConnectionPool | None = None
 def init_pool(minconn: int = 2, maxconn: int = 10) -> None:
     """يُستدعى مرة واحدة عند startup من lifespan."""
     global _pool
+    if _pool is not None:
+        return
     database_url = os.getenv("DATABASE_URL")
     if not database_url:
         raise RuntimeError("DATABASE_URL environment variable is not set")
@@ -37,6 +39,11 @@ def close_pool() -> None:
         _pool.closeall()
         _pool = None
         logger.info("Database connection pool closed")
+
+
+def is_pool_initialized() -> bool:
+    """هل تم تهيئة connection pool بالفعل؟"""
+    return _pool is not None
 
 
 @contextmanager

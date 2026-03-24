@@ -208,7 +208,8 @@ class TestGenerateSignalsFromPatterns:
 
             mock_bus = MagicMock()
             mock_bus.client = MagicMock()
-            mock_bus.publish = MagicMock(side_effect=lambda *a: call_order.append("publish"))
+            # الكود يستخدم publish_stream (وليس publish) لإرسال الإشارات
+            mock_bus.publish_stream = MagicMock(side_effect=lambda *a, **kw: call_order.append("publish"))
             mock_bus_factory.return_value = mock_bus
 
             generate_signals_from_patterns([pattern])
