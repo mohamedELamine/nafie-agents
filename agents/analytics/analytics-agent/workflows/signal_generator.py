@@ -22,10 +22,10 @@ def generate_signals_from_patterns(patterns: List[Any]) -> List[Any]:
             if pattern.pattern_type == "SALES_DROP_7D":
                 signal = create_signal(
                     signal_type=SignalType.SALES_DROP_ALERT,
-                    priority=SignalPriority.HIGH,
+                    priority=SignalPriority.IMMEDIATE,
                     target_agent="marketing_agent",
                     theme_slug="all",
-                    confidence=AttributionConfidence.HIGH,
+                    confidence=0.9,
                     data={
                         "current_sales": pattern.supporting_metrics.get("current_sales", 0),
                         "previous_sales": pattern.supporting_metrics.get("previous_sales", 0),
@@ -38,10 +38,10 @@ def generate_signals_from_patterns(patterns: List[Any]) -> List[Any]:
             elif pattern.pattern_type == "BEST_CHANNEL_30D":
                 signal = create_signal(
                     signal_type=SignalType.BEST_CHANNEL,
-                    priority=SignalPriority.LOW,
+                    priority=SignalPriority.WEEKLY,
                     target_agent="marketing_agent",
                     theme_slug="all",
-                    confidence=AttributionConfidence.MEDIUM,
+                    confidence=0.6,
                     data={
                         "best_channel": pattern.supporting_metrics.get("best_channel"),
                         "sales_count": pattern.supporting_metrics.get("sales_count"),
@@ -72,10 +72,10 @@ def emit_immediate_signal(
     try:
         signal = create_signal(
             signal_type=signal_type,
-            priority=SignalPriority.MEDIUM,
+            priority=SignalPriority.DAILY,
             target_agent=target_agent,
             theme_slug=theme_slug,
-            confidence=AttributionConfidence.MEDIUM,
+            confidence=0.6,
             data=data,
         )
 
@@ -153,8 +153,11 @@ def create_signal(
     priority: SignalPriority,
     target_agent: str,
     theme_slug: str,
-    confidence: AttributionConfidence,
+    confidence: float,
     data: Dict[str, Any],
+    channel: Optional[str] = None,
+    recommendation: str = "",
+    supporting_pattern_id: Optional[str] = None,
 ) -> Any:
     """Create a new analytics signal."""
     from ..models import AnalyticsSignal
@@ -165,7 +168,10 @@ def create_signal(
         priority=priority,
         target_agent=target_agent,
         theme_slug=theme_slug,
+        channel=channel,
+        recommendation=recommendation,
         confidence=confidence,
+        supporting_pattern_id=supporting_pattern_id,
         data=data,
         generated_at=datetime.utcnow(),
     )

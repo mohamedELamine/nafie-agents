@@ -102,13 +102,16 @@ def _handle_new_sale(event: AnalyticsEvent) -> None:
         return
 
     # attribute_sale يفتح connection خاصاً بها ويُغلقه
-    attribute_sale(
-        sale_id      = str(sale_id),
-        sale_date    = event.occurred_at,   # occurred_at — ليس received_at
-        theme_slug   = theme_slug,
-        amount_usd   = amount_usd,
-        license_tier = license_tier,
-    )
+    try:
+        attribute_sale(
+            sale_id      = str(sale_id),
+            sale_date    = event.occurred_at,   # occurred_at — ليس received_at
+            theme_slug   = theme_slug,
+            amount_usd   = amount_usd,
+            license_tier = license_tier,
+        )
+    except Exception as e:
+        logger.error(f"Attribution failed for sale {sale_id}: {e}")
 
 
 def start_event_collector() -> None:
