@@ -224,6 +224,27 @@ class SupportAgent(BaseAgent):
 
     agent_name = AgentName.SUPPORT
 
+    def __init__(self):
+        super().__init__()
+        # Initialise external clients from service factories (env-driven)
+        from .services import (
+            get_helpscout_client,
+            get_claude_client,
+            get_qdrant_client,
+            get_redis_bus,
+            ResendClient,
+        )
+        import os
+        self._helpscout = get_helpscout_client()
+        self._claude    = get_claude_client()
+        self._qdrant    = get_qdrant_client()
+        self._resend    = ResendClient(
+            api_key=os.environ.get("RESEND_API_KEY", ""),
+            owner_email=os.environ.get("OWNER_EMAIL", ""),
+        )
+        # redis_bus: reuse the BaseAgent bus (already connected to Redis)
+        self._redis_bus = get_redis_bus()
+
     async def setup_handlers(self) -> None:
         await self.bus.subscribe(EventType.TICKET_CREATED, self.run)
 
@@ -231,11 +252,11 @@ class SupportAgent(BaseAgent):
         try:
             result = run_support_pipeline(
                 ticket_data=event["payload"],
-                helpscout_client=None,  # injected at startup
-                claude_client=None,
-                qdrant_client=None,
-                resend_client=None,
-                redis_bus=None,
+                helpscout_client=self._helpscout,
+                claude_client=self._claude,
+                qdrant_client=self._qdrant,
+                resend_client=self._resend,
+                redis_bus=self._redis_bus,
             )
             if result.get("success"):
                 await self.emit(
