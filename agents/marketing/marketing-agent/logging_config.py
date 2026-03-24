@@ -6,7 +6,7 @@ from typing import Any, Dict
 import redis
 from redis.exceptions import RedisError
 
-from .db.redis_bus import RedisBus
+from .services.redis_bus import RedisBus
 
 
 def configure_logging(log_level: str = "INFO") -> None:

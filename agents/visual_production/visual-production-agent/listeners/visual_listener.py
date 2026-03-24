@@ -1,7 +1,7 @@
 import logging
+import os
 import asyncio
 from typing import Dict, Any
-import logging
 import json
 
 logger = logging.getLogger("visual_production.visual_listener")
@@ -31,7 +31,7 @@ class VisualListener:
             theme_contract=theme_contract,
             batch_id=batch_id,
             version=version,
-            owner_email=event_data.get("owner_email", "admin@yourdomain.com"),
+            owner_email=event_data.get("owner_email") or os.environ.get("VISUAL_OWNER_EMAIL", "admin@example.com"),
         )
 
         return result

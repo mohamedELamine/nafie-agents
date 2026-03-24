@@ -54,7 +54,7 @@ class ResendClient:
 
             response = resend.Emails.send(
                 {
-                    "from": "Visual Production <no-reply@yourdomain.com>",
+                    "from": f"Visual Production <{os.environ.get('RESEND_FROM_EMAIL', 'no-reply@example.com')}>",
                     "to": [to_email],
                     "subject": f"Visual Assets Review: {theme_slug} v{version}",
                     "html": html_content,
@@ -89,7 +89,7 @@ class ResendClient:
 
             response = resend.Emails.send(
                 {
-                    "from": "Visual Production <no-reply@yourdomain.com>",
+                    "from": f"Visual Production <{os.environ.get('RESEND_FROM_EMAIL', 'no-reply@example.com')}>",
                     "to": [to_email],
                     "subject": f"Visual Production Failed: {batch_id}",
                     "html": html_content,
@@ -130,7 +130,7 @@ class ResendClient:
 
             response = resend.Emails.send(
                 {
-                    "from": "Visual Production <no-reply@yourdomain.com>",
+                    "from": f"Visual Production <{os.environ.get('RESEND_FROM_EMAIL', 'no-reply@example.com')}>",
                     "to": [to_email],
                     "subject": f"Visual Assets Batch Completed: {batch_id}",
                     "html": html_content,

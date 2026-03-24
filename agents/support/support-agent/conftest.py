@@ -29,19 +29,24 @@ def _create_package(name: str, path: str, parent=None) -> types.ModuleType:
 # ── 1. Register the root package "support_agent" ──────────────────────────
 sa_pkg = _create_package("support_agent", SA_DIR)
 
-# ── 2. Mock transitive deps that logging_config needs (redis, RedisBus) ───
-#    We stub them so importing logging_config itself doesn't require redis.
-sys.modules.setdefault("redis", MagicMock())
+# ── 2. Mock transitive deps that logging_config needs ─────────────────────
+sys.modules.setdefault("redis",            MagicMock())
 sys.modules.setdefault("redis.exceptions", MagicMock())
+sys.modules.setdefault("httpx",            MagicMock())
+sys.modules.setdefault("psycopg2",         MagicMock())
+sys.modules.setdefault("psycopg2.pool",    MagicMock())
 
-# Stub out the db.redis_bus module so logging_config's import resolves
-db_dir  = os.path.join(SA_DIR, "db")
-sa_db   = _create_package("support_agent.db", db_dir, sa_pkg)
+# Stub out db and services subpackages so logging_config and services resolve
+db_dir       = os.path.join(SA_DIR, "db")
+services_dir = os.path.join(SA_DIR, "services")
+sa_db       = _create_package("support_agent.db",       db_dir,       sa_pkg)
+sa_services = _create_package("support_agent.services", services_dir, sa_pkg)
 
 redis_bus_mock = MagicMock()
 redis_bus_mock.RedisBus = MagicMock
-sys.modules["support_agent.db.redis_bus"] = redis_bus_mock
-sa_db.redis_bus = redis_bus_mock
+# logging_config now correctly imports from .services.redis_bus
+sys.modules["support_agent.services.redis_bus"] = redis_bus_mock
+sa_services.redis_bus = redis_bus_mock
 
 # ── 3. Register subpackages support_agent.nodes and support_agent.db ──────
 nodes_dir = os.path.join(SA_DIR, "nodes")

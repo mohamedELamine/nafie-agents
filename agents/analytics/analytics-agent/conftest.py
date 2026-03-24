@@ -63,8 +63,8 @@ _stub("analytics_agent.db.report_store",      aa_db)
 _stub("analytics_agent.db.attribution_store", aa_db)
 _stub("analytics_agent.db.metric_store",      aa_db)
 _stub("analytics_agent.db.outcome_store",     aa_db)
-# logging_config.py imports from .db.redis_bus (should be .services.redis_bus — bug in source)
-_stub("analytics_agent.db.redis_bus",         aa_db, RedisBus=MagicMock)
+# services.redis_bus: used by logging_config.py (was wrongly importing from db — now fixed)
+_stub("analytics_agent.services.redis_bus",   aa_services)
 
 # connection: provide a context-manager-compatible get_conn stub
 _conn_mock = MagicMock()
