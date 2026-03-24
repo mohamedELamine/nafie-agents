@@ -9,6 +9,7 @@ import json
 import logging
 import os
 from typing import Dict, List, Optional
+from datetime import datetime, timezone
 
 import anthropic
 
@@ -103,8 +104,11 @@ class ClaudeContentClient:
     """
 
     def __init__(self, api_key: Optional[str] = None):
-        key         = api_key or os.environ["CLAUDE_API_KEY"]
-        self._client = anthropic.Anthropic(api_key=key)
+        key = api_key or os.environ.get("CLAUDE_API_KEY")
+        self._client = anthropic.Anthropic(api_key=key) if key else None
+        self._offline_mode = self._client is None
+        if self._offline_mode:
+            logger.warning("CLAUDE_API_KEY missing; content agent running in offline fallback mode")
 
     # ── 1. FACT_NORMALIZER ────────────────────────────────────────
 
@@ -118,6 +122,13 @@ class ClaudeContentClient:
         يُنتج FactSheet من ContextBundle.
         يُستدعى قبل التوليد دائماً.
         """
+        if self._offline_mode:
+            return _normalize_facts_offline(
+                context_bundle_summary,
+                constitution_version,
+                template_version,
+            )
+
         response = self._client.messages.create(
             model      = MODEL,
             max_tokens = 600,
@@ -160,6 +171,29 @@ class ClaudeContentClient:
 
         system_prompt = self._build_system_prompt(plan, fact_sheet)
         user_prompt   = self._build_generation_prompt(request, plan, template)
+
+        if self._offline_mode:
+            body = _generate_body_offline(request.theme_slug, plan.channel_style, 1)
+            versioning = _build_versioning_dict(plan)
+            return ContentPiece(
+                content_id=str(uuid.uuid4()),
+                request_id=request.request_id,
+                content_type=request.content_type,
+                variant_label=None,
+                theme_slug=request.theme_slug,
+                title=_extract_title(body),
+                body=body,
+                metadata={"word_count": count_words(body), "generated_mode": "offline"},
+                versioning=versioning,
+                structural_score=0.0,
+                language_score=0.0,
+                factual_score=0.0,
+                validation_score=0.0,
+                validation_issues=[],
+                status=ContentStatus.VALIDATING,
+                created_at=datetime.now(timezone.utc),
+                target_agent=request.target_agent,
+            )
 
         response = self._client.messages.create(
             model      = MODEL,
@@ -218,6 +252,32 @@ class ClaudeContentClient:
 
 لكل متغير: hook مختلف أو CTA مختلف أو زاوية مختلفة.
 """
+        if self._offline_mode:
+            versioning = _build_versioning_dict(plan)
+            now = datetime.now(timezone.utc)
+            return [
+                ContentPiece(
+                    content_id=str(uuid.uuid4()),
+                    request_id=request.request_id,
+                    content_type=request.content_type,
+                    variant_label=label,
+                    theme_slug=request.theme_slug,
+                    title=None,
+                    body=_generate_body_offline(request.theme_slug, plan.channel_style, index),
+                    metadata={"word_count": count_words(_generate_body_offline(request.theme_slug, plan.channel_style, index)), "generated_mode": "offline"},
+                    versioning=versioning,
+                    structural_score=0.0,
+                    language_score=0.0,
+                    factual_score=0.0,
+                    validation_score=0.0,
+                    validation_issues=[],
+                    status=ContentStatus.VALIDATING,
+                    created_at=now,
+                    target_agent=request.target_agent,
+                )
+                for index, label in enumerate(["A", "B", "C"][: plan.variant_count], start=1)
+            ]
+
         response = self._client.messages.create(
             model      = MODEL,
             max_tokens = _calculate_max_tokens(plan.word_budget * plan.variant_count),
@@ -279,6 +339,9 @@ class ClaudeContentClient:
             return {"violations": [], "all_clear": True, "fallback": policy, "error": str(exc)}
 
     def _factual_check(self, body: str, fact_sheet: FactSheet) -> Dict:
+        if self._offline_mode:
+            return {"violations": [], "all_clear": True, "mode": "offline"}
+
         allowed   = fact_sheet.verified_facts + fact_sheet.allowed_inferences
         forbidden = fact_sheet.forbidden_claims
 
@@ -378,6 +441,36 @@ def _build_versioning_dict(plan: ContentPlan) -> Dict:
         "model_version":        MODEL,
         "generated_at":         datetime.datetime.now(datetime.timezone.utc).isoformat(),
     }
+
+
+def _normalize_facts_offline(
+    context_bundle_summary: str,
+    constitution_version: str,
+    template_version: str,
+) -> FactSheet:
+    lines = [line.strip("- ").strip() for line in context_bundle_summary.splitlines() if line.strip()]
+    verified = [line for line in lines if len(line) > 8][:5]
+    allowed = [f"صياغة تسويقية منضبطة: {line}" for line in verified[:3]]
+    forbidden = [
+        "أي ادعاء عن نتائج تجارية أو أرقام غير موجودة في البيانات",
+        "أي مقارنة مع منافسين أو وعود مضمونة",
+    ]
+    return FactSheet(
+        verified_facts=verified or ["القالب جاهز للإطلاق بلغة عربية واضحة"],
+        allowed_inferences=allowed,
+        forbidden_claims=forbidden,
+        constitution_version=constitution_version,
+        template_version=template_version,
+    )
+
+
+def _generate_body_offline(theme_slug: Optional[str], channel_style: str, variant_index: int) -> str:
+    theme_name = theme_slug or "القالب"
+    intro = f"هذا المحتوى التجريبي يخص {theme_name} بصياغة مناسبة لقناة {channel_style}."
+    value = "يعرض الفوائد الرئيسية للقالب بلغة عربية واضحة، ويركز على سهولة الإعداد وسلاسة الاستخدام."
+    details = f"النسخة {variant_index} تقدم زاوية مختلفة في الافتتاح والدعوة إلى الإجراء مع الحفاظ على نفس الحقائق الأساسية."
+    closing = "إذا كنت تستعد للإطلاق، فهذه الرسالة تمنحك مادة أولية قابلة للنشر والمراجعة الداخلية بسرعة."
+    return " ".join([intro, value, details, closing])
 
 
 def _extract_title(body: str) -> Optional[str]:

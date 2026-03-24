@@ -1,6 +1,7 @@
 import logging
 from typing import Optional
 from datetime import datetime, timezone
+from psycopg2.extras import Json
 from models import WorkflowInstance, WorkflowStatus, WorkflowStep, WorkflowType
 from db.connection import coerce_datetime, get_conn
 
@@ -36,7 +37,7 @@ class WorkflowStore:
                             instance.status.value,
                             datetime.now(timezone.utc).isoformat(),
                             instance.retry_count,
-                            str(instance.context) if instance.context else None,
+                            Json(instance.context) if instance.context else None,
                         ),
                     )
                     conn.commit()

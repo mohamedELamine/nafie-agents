@@ -2,6 +2,7 @@ import logging
 from typing import Optional
 from datetime import datetime, timezone
 import uuid
+from psycopg2.extras import Json
 from models import SupervisorAuditLog, AuditCategory
 from db.connection import coerce_datetime, get_conn
 
@@ -38,7 +39,7 @@ class AuditStore:
                             target,
                             workflow_id,
                             correlation_id,
-                            str(details) if details else None,
+                            Json(details) if details else None,
                             outcome,
                             datetime.now(timezone.utc).isoformat(),
                         ),

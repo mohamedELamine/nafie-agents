@@ -7,11 +7,24 @@ run_marketing_pipeline() executes the graph against a MarketingState.
 import asyncio
 import os
 import sys
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 from core.base_agent import BaseAgent
 from core.state import AgentName, BusinessEvent, EventType
+from core.contracts import (
+    EVENT_ANALYTICS_SIGNAL,
+    EVENT_CAMPAIGN_LAUNCHED,
+    EVENT_CONTENT_READY,
+    EVENT_NEW_PRODUCT_LIVE,
+    EVENT_THEME_ASSETS_READY,
+    STREAM_ANALYTICS_SIGNALS,
+    STREAM_ASSET_EVENTS,
+    STREAM_CONTENT_EVENTS,
+    STREAM_MARKETING_EVENTS,
+    STREAM_PRODUCT_EVENTS,
+)
 
 from .logging_config import get_logger
 from .nodes.analytics_consumer import make_analytics_consumer_node
@@ -170,6 +183,34 @@ class MarketingAgent(BaseAgent):
 
     agent_name = AgentName.MARKETING
 
+    def __init__(self):
+        super().__init__()
+        self._stream_bus = _make_redis()
+        self._stream_bridge_task: asyncio.Task | None = None
+        self._campaign_state: Dict[str, Dict[str, Any]] = {}
+
+    async def start(self) -> None:
+        await self.bus.connect(self.agent_name)
+        await self.setup_handlers()
+        self._running = True
+        self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+        self._stream_bridge_task = asyncio.create_task(self._stream_bridge_loop())
+        logger.info(f"[{self.agent_name}] ✓ جاهز")
+        try:
+            await self.bus.listen()
+        finally:
+            if self._stream_bridge_task:
+                self._stream_bridge_task.cancel()
+                await asyncio.gather(self._stream_bridge_task, return_exceptions=True)
+                self._stream_bridge_task = None
+
+    async def stop(self) -> None:
+        if self._stream_bridge_task:
+            self._stream_bridge_task.cancel()
+            await asyncio.gather(self._stream_bridge_task, return_exceptions=True)
+            self._stream_bridge_task = None
+        await super().stop()
+
     async def setup_handlers(self) -> None:
         self.bus.on(EventType.CONTENT_READY, self.run)
         self.bus.on(EventType.VISUAL_READY, self.run)
@@ -186,6 +227,104 @@ class MarketingAgent(BaseAgent):
                 )
         except Exception as e:
             await self.emit_error(str(e), trace_id=event.get("trace_id"))
+
+    async def _stream_bridge_loop(self) -> None:
+        while self._running:
+            try:
+                await self._poll_stream(STREAM_PRODUCT_EVENTS)
+                await self._poll_stream(STREAM_CONTENT_EVENTS)
+                await self._poll_stream(STREAM_ASSET_EVENTS)
+                await self._poll_stream(STREAM_ANALYTICS_SIGNALS)
+            except Exception as exc:
+                logger.error("marketing stream bridge error: %s", exc)
+            await asyncio.sleep(0.1)
+
+    async def _poll_stream(self, stream_name: str) -> None:
+        messages = await asyncio.to_thread(
+            self._stream_bus.read_group,
+            stream_name,
+            f"{stream_name}-bridge",
+            10,
+            200,
+            ">",
+        )
+        for message in messages:
+            message_id = message.pop("__message_id", None)
+            await self._record_stream_event(stream_name, message)
+            if message_id:
+                await asyncio.to_thread(self._stream_bus.ack, stream_name, message_id)
+
+    async def _record_stream_event(self, stream_name: str, message: Dict[str, Any]) -> None:
+        event_type = message.get("event_type")
+        data = message.get("data", {})
+        if not isinstance(data, dict):
+            data = {}
+        theme_slug = data.get("theme_slug") or message.get("theme_slug")
+        if not theme_slug:
+            return
+
+        campaign = self._campaign_state.setdefault(
+            theme_slug,
+            {
+                "theme_slug": theme_slug,
+                "product_live": False,
+                "content_ready": None,
+                "assets_ready": None,
+                "best_channel": None,
+                "best_time": None,
+                "emitted": False,
+                "correlation_id": message.get("correlation_id"),
+            },
+        )
+
+        if stream_name == STREAM_PRODUCT_EVENTS and event_type == EVENT_NEW_PRODUCT_LIVE:
+            campaign["product_live"] = True
+            campaign["product_event"] = data
+        elif stream_name == STREAM_CONTENT_EVENTS and event_type == EVENT_CONTENT_READY:
+            campaign["content_ready"] = data
+        elif stream_name == STREAM_ASSET_EVENTS and event_type == EVENT_THEME_ASSETS_READY:
+            campaign["assets_ready"] = data
+        elif stream_name == STREAM_ANALYTICS_SIGNALS and event_type == EVENT_ANALYTICS_SIGNAL:
+            if data.get("best_channel"):
+                campaign["best_channel"] = data["best_channel"]
+            if data.get("best_time"):
+                campaign["best_time"] = data["best_time"]
+
+        if campaign["product_live"] and campaign["content_ready"]:
+            await self._emit_campaign_ready(campaign)
+
+    async def _emit_campaign_ready(self, campaign: Dict[str, Any]) -> None:
+        if campaign["emitted"]:
+            return
+
+        now = datetime.now(timezone.utc)
+        campaign_id = f"camp_{campaign['theme_slug']}_{int(now.timestamp())}"
+        assets_ready = campaign.get("assets_ready") or {}
+        payload = {
+            "campaign_id": campaign_id,
+            "theme_slug": campaign["theme_slug"],
+            "content_id": campaign["content_ready"].get("content_id"),
+            "asset_batch_id": assets_ready.get("batch_id"),
+            "best_channel": campaign.get("best_channel"),
+            "best_time": campaign.get("best_time"),
+            "generated_at": now.isoformat(),
+        }
+        await self.emit(
+            EventType.CAMPAIGN_SENT,
+            payload,
+            trace_id=campaign.get("correlation_id"),
+        )
+        self._stream_bus.publish_stream(
+            STREAM_MARKETING_EVENTS,
+            self._stream_bus.build_event(
+                event_type=EVENT_CAMPAIGN_LAUNCHED,
+                campaign_id=campaign_id,
+                theme_slug=campaign["theme_slug"],
+                data=payload,
+            ),
+        )
+        campaign["emitted"] = True
+        logger.info("marketing stream bridge emitted campaign %s for %s", campaign_id, campaign["theme_slug"])
 
 
 if __name__ == "__main__":

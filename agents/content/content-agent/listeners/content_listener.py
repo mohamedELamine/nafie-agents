@@ -24,6 +24,7 @@ from core.contracts import (
     STREAM_CONTENT_EVENTS,
     STREAM_PRODUCT_EVENTS,
 )
+from db.connection import close_pool, init_pool
 from models import (
     CONTENT_CATEGORY_MAP, ContentRequest, ContentTrigger, ContentType,
     parse_evidence_contract,
@@ -51,6 +52,7 @@ class ContentListener:
 
     def start(self) -> None:
         """يبدأ الاستماع على product-events و content-events."""
+        init_pool()
         self._redis.ensure_consumer_group(STREAM_PRODUCT_EVENTS, CONSUMER_GROUP)
         self._redis.ensure_consumer_group(STREAM_CONTENT_EVENTS, CONSUMER_GROUP)
         self._running = True
@@ -59,6 +61,7 @@ class ContentListener:
 
     def stop(self) -> None:
         self._running = False
+        close_pool()
         logger.info("content_listener.stopped")
 
     def _listen_loop(self) -> None:

@@ -1,5 +1,6 @@
 import asyncio
 import os
+from urllib.parse import urlparse
 from dotenv import load_dotenv
 
 from logging_config import configure_logging, get_logger
@@ -36,6 +37,7 @@ class Supervisor:
         self.owner_email = owner_email
         self.heartbeat_timeout = heartbeat_timeout_sec
         self.health_check_interval = health_check_interval_sec
+        self._listener_tasks = []
 
         # Initialize components
         self.system_listener = SystemListener()
@@ -71,8 +73,10 @@ class Supervisor:
     async def _start_listeners(self):
         """Start listening for events"""
         try:
-            await self.system_listener.start()
-            await self.command_listener.start()
+            self._listener_tasks = [
+                asyncio.create_task(self.system_listener.start(), name="supervisor-system-listener"),
+                asyncio.create_task(self.command_listener.start(), name="supervisor-command-listener"),
+            ]
             logger.info("Listeners started successfully")
 
         except Exception as e:
@@ -117,6 +121,11 @@ class Supervisor:
             # Stop listeners
             await self.system_listener.stop()
             await self.command_listener.stop()
+            for task in self._listener_tasks:
+                task.cancel()
+            if self._listener_tasks:
+                await asyncio.gather(*self._listener_tasks, return_exceptions=True)
+            self._listener_tasks = []
 
             close_pool()
             logger.info("Supervisor agent shutdown complete")
@@ -136,9 +145,13 @@ async def main():
         # Initialise connection pool before any store is used
         init_pool()
 
+        parsed_redis = urlparse(redis_url)
+        redis_host = parsed_redis.hostname or "localhost"
+        redis_port = parsed_redis.port or 6379
+
         bus = RedisBus(
-            host=redis_url.split("://")[1].split(":")[0] if "://" in redis_url else "localhost",
-            port=int(redis_url.split(":")[-1]) if ":" in redis_url.split("://")[-1] else 6379,
+            host=redis_host,
+            port=redis_port,
         )
 
         # Initialize supervisor
