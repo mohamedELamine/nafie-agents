@@ -1,3 +1,4 @@
+import base64
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict
@@ -6,6 +7,16 @@ from ..db import save_manifest
 from ..db.connection import get_conn
 
 logger = logging.getLogger("visual_production.review_gate")
+
+
+def _checkpoint_assets(processed_assets: Dict[str, Any]) -> Dict[str, Any]:
+    checkpoint_assets: Dict[str, Any] = {}
+    for asset_type, asset in processed_assets.get("processed", {}).items():
+        checkpoint_assets[asset_type] = {
+            key: base64.b64encode(value).decode("ascii") if isinstance(value, bytes) else value
+            for key, value in asset.items()
+        }
+    return checkpoint_assets
 
 
 class ReviewGateNode:
@@ -30,7 +41,7 @@ class ReviewGateNode:
                 "theme_slug": theme_slug,
                 "version": version,
                 "owner_email": owner_email,
-                "assets": processed_assets.get("processed", {}),
+                "assets": _checkpoint_assets(processed_assets),
                 "total_size_kb": processed_assets.get("total_size_kb", 0),
             },
             ttl=48 * 3600,

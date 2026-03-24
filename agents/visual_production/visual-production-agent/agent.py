@@ -37,6 +37,10 @@ from .nodes import (
 logger = get_logger("visual_production.agent")
 
 
+def _auto_approve_review() -> bool:
+    return os.environ.get("VISUAL_AUTO_APPROVE_REVIEW", "").lower() in {"1", "true", "yes", "on"}
+
+
 # ---------------------------------------------------------------------------
 # Data class holding all node instances for a running pipeline
 # ---------------------------------------------------------------------------
@@ -192,6 +196,19 @@ async def run_visual_pipeline(
         f"Visual pipeline paused at review_gate for batch {batch_id} "
         f"— awaiting human approval"
     )
+
+    if _auto_approve_review():
+        logger.info("VISUAL_AUTO_APPROVE_REVIEW enabled; completing batch %s automatically", batch_id)
+        approved_result = await complete_approved_pipeline(
+            agent=agent,
+            batch_id=batch_id,
+            theme_slug=theme_contract.get("slug", ""),
+            version=version,
+            processed_result=processed_result,
+            owner_email=owner_email,
+        )
+        await agent.redis.checkpoint_delete(f"visual_review:{batch_id}")
+        return approved_result
 
     return {
         "status": review_result["status"],   # "review_pending"

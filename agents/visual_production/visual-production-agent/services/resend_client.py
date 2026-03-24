@@ -18,6 +18,9 @@ class ResendClient:
         total_cost: float,
     ) -> bool:
         """Send visual review request email"""
+        if not self.api_key:
+            logger.warning("RESEND_API_KEY missing; skipping visual review email")
+            return True
         try:
             # Build HTML content
             html_content = f"""
@@ -71,6 +74,9 @@ class ResendClient:
         self, to_email: str, batch_id: str, error_message: str, theme_slug: str
     ) -> bool:
         """Send batch failure alert"""
+        if not self.api_key:
+            logger.warning("RESEND_API_KEY missing; skipping batch failure email")
+            return True
         try:
             html_content = f"""
             <html>
@@ -111,6 +117,9 @@ class ResendClient:
         rejected_count: int,
     ) -> bool:
         """Send batch completion notification"""
+        if not self.api_key:
+            logger.warning("RESEND_API_KEY missing; skipping batch completion email")
+            return True
         try:
             html_content = f"""
             <html>

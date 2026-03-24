@@ -16,9 +16,9 @@ _pool: pool.SimpleConnectionPool | None = None
 
 def init_pool(minconn: int = 2, maxconn: int = 10) -> None:
     global _pool
-    dsn = os.environ.get("VISUAL_DATABASE_URL")
+    dsn = os.environ.get("VISUAL_DATABASE_URL") or os.environ.get("DATABASE_URL")
     if not dsn:
-        raise RuntimeError("VISUAL_DATABASE_URL environment variable is not set")
+        raise RuntimeError("VISUAL_DATABASE_URL or DATABASE_URL environment variable is not set")
     _pool = pool.SimpleConnectionPool(minconn, maxconn, dsn=dsn)
     logger.info("Visual-production DB pool initialised")
 

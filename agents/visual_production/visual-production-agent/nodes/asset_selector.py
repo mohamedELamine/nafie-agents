@@ -1,5 +1,9 @@
+import logging
 from typing import Dict, Any
+
 from ..models import AssetType
+
+logger = logging.getLogger("visual_production.asset_selector")
 
 
 class AssetSelectorNode:

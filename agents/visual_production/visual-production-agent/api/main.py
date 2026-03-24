@@ -1,8 +1,10 @@
 """
 Visual-production-agent FastAPI application.
 """
+import base64
 import os
 import sys
+import types
 import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Dict
@@ -13,6 +15,11 @@ from fastapi.responses import JSONResponse
 
 # Ensure the agent root is on sys.path for `uvicorn api.main:app`.
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+_AGENT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+_pkg = types.ModuleType("visual_production_agent")
+_pkg.__path__ = [_AGENT_DIR]
+_pkg.__package__ = "visual_production_agent"
+sys.modules.setdefault("visual_production_agent", _pkg)
 
 from db import (
     close_pool,
@@ -36,6 +43,16 @@ async def _get_review_checkpoint(redis_bus, batch_key: str) -> Dict[str, Any]:
             detail=f"Review checkpoint for batch {batch_key!r} not found",
         )
     return checkpoint
+
+
+def _decode_checkpoint_assets(assets: Dict[str, Any]) -> Dict[str, Any]:
+    decoded_assets: Dict[str, Any] = {}
+    for asset_type, asset in assets.items():
+        decoded_assets[asset_type] = {
+            key: base64.b64decode(value) if key == "image_bytes" and isinstance(value, str) else value
+            for key, value in asset.items()
+        }
+    return decoded_assets
 
 
 async def _finalize_non_approved_review(redis_bus, batch_key: str, status: str, notes: str) -> None:
@@ -117,7 +134,7 @@ async def handle_review_decision(
 
     logger.info(f"Review decision for {batch_key}: {decision_type}")
 
-    from agent import build_visual_agent, complete_approved_pipeline
+    from visual_production_agent.agent import build_visual_agent, complete_approved_pipeline
 
     agent = build_visual_agent()
     checkpoint = await _get_review_checkpoint(agent.redis, batch_key)
@@ -129,7 +146,7 @@ async def handle_review_decision(
             theme_slug=checkpoint.get("theme_slug", ""),
             version=checkpoint.get("version", "1.0"),
             processed_result={
-                "processed": checkpoint.get("assets", {}),
+                "processed": _decode_checkpoint_assets(checkpoint.get("assets", {})),
                 "total_size_kb": checkpoint.get("total_size_kb", 0),
             },
             owner_email=checkpoint.get("owner_email", ""),
@@ -200,7 +217,7 @@ async def run_visual_pipeline_endpoint(request: Request) -> Dict[str, Any]:
 
         logger.info(f"Manual pipeline triggered — batch {batch_id}")
 
-        from agent import build_visual_agent, run_visual_pipeline
+        from visual_production_agent.agent import build_visual_agent, run_visual_pipeline
 
         agent = build_visual_agent()
         result = await run_visual_pipeline(
