@@ -26,6 +26,8 @@ def _load_module(name: str, path: pathlib.Path):
 
 
 def test_health_store_import_is_lazy_without_database_url():
+    """HealthStore يمكن استيراده وإنشاؤه بدون DATABASE_URL —
+    الاتصال لا يحدث عند الاستيراد، بل عند استدعاء get_conn() فقط."""
     os.environ.pop("DATABASE_URL", None)
     sys.path.insert(0, str(SUPERVISOR_ROOT))
 
@@ -34,13 +36,24 @@ def test_health_store_import_is_lazy_without_database_url():
         AgentHealthRecord=object,
         AgentHealthStatus=lambda value: value,
     )
-    _load_module("db.connection", SUPERVISOR_ROOT / "db" / "connection.py")
+    conn_module = _load_module(
+        "db.connection", SUPERVISOR_ROOT / "db" / "connection.py"
+    )
 
     module = _load_module(
         "health_store_under_test",
         SUPERVISOR_ROOT / "db" / "health_store.py",
     )
 
+    # الاستيراد يجب أن ينجح بدون DATABASE_URL
     store = module.HealthStore()
+    assert store is not None
 
-    assert store.conn is None
+    # لا يوجد self.conn بعد التحويل إلى pool pattern
+    assert not hasattr(store, "conn")
+
+    # استدعاء get_conn() بدون init_pool يرفع RuntimeError — ليس عند الاستيراد
+    import pytest
+    with pytest.raises(RuntimeError, match="not initialised"):
+        with conn_module.get_conn():
+            pass

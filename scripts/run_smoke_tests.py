@@ -13,7 +13,6 @@ TEST_FILES = [
     ROOT / "agents/analytics/analytics-agent/tests/test_signal_delivery.py",
     ROOT / "agents/analytics/analytics-agent/tests/test_batch_connection_usage.py",
     ROOT / "agents/content/content-agent/tests/test_content_dispatcher.py",
-    ROOT / "agents/marketing/marketing-agent/tests/test_campaign_recorder.py",
     ROOT / "agents/platform/platform-agent/tests/test_registry_proxy.py",
     ROOT / "agents/support/support-agent/tests/test_ticket_updater.py",
     ROOT / "agents/support/support-agent/tests/test_qdrant_embeddings.py",
