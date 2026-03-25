@@ -1,8 +1,9 @@
-import logging
+import os
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import httpx
-from qdrant_client import QdrantClient
+from qdrant_client import QdrantClient as ExternalQdrantClient
 from qdrant_client.models import Filter, FieldCondition, MatchValue
 
 from ..logging_config import get_logger
@@ -14,13 +15,26 @@ class QdrantClient:
     """Client for Qdrant vector database."""
 
     def __init__(self, url: str):
-        self.client = QdrantClient(url=url)
+        self.client = ExternalQdrantClient(url=url)
+        self.embedding_provider = (
+            os.environ.get("SUPPORT_EMBEDDING_PROVIDER")
+            or ("openai" if os.environ.get("OPENAI_API_KEY") else "deterministic")
+        ).lower()
+        self.embedding_model = os.environ.get(
+            "SUPPORT_EMBEDDING_MODEL", "text-embedding-3-small"
+        )
+        self.embedding_api_key = os.environ.get("OPENAI_API_KEY", "")
+        self.embedding_base_url = os.environ.get(
+            "SUPPORT_EMBEDDING_BASE_URL", "https://api.openai.com/v1/embeddings"
+        )
         self.collections = {
             "theme_docs": "theme_docs_collection",
             "general_faqs": "general_faqs_collection",
             "resolved_tickets": "resolved_tickets_collection",
         }
-        self.vector_size = 1536
+        self.vector_size = int(
+            os.environ.get("SUPPORT_EMBEDDING_VECTOR_SIZE", "1536")
+        )
         self._create_collections()
 
     def _create_collections(self) -> None:
@@ -98,7 +112,7 @@ class QdrantClient:
                         "payload": {
                             "text": text,
                             "metadata": metadata or {},
-                            "created_at": datetime.utcnow().isoformat(),
+                            "created_at": datetime.now(timezone.utc).isoformat(),
                         },
                     }
                 ],
@@ -129,13 +143,92 @@ class QdrantClient:
 
         return results
 
+    def retrieve_knowledge(
+        self,
+        query: str,
+        category: Optional[str] = None,
+        limit: int = 5,
+    ) -> List[Dict[str, Any]]:
+        """Retrieve support knowledge in the shape expected by support nodes."""
+        category_map = {
+            "technical": ["theme_docs"],
+            "license": ["theme_docs"],
+            "billing": ["general_faqs", "resolved_tickets"],
+            "general": ["general_faqs"],
+            "resolved": ["resolved_tickets"],
+            "theme": ["theme_docs"],
+        }
+        collections = category_map.get(category or "", ["theme_docs", "general_faqs"])
+
+        results: List[Dict[str, Any]] = []
+        for collection_key in collections:
+            collection_name = self.collections[collection_key]
+            for hit in self.search(query=query, collection_name=collection_name, limit=limit):
+                metadata = hit.get("metadata", {})
+                nested_metadata = metadata.get("metadata", {})
+                source = nested_metadata.get("source") or metadata.get("source") or collection_name
+                answer = (
+                    metadata.get("answer")
+                    or nested_metadata.get("answer")
+                    or hit.get("text", "")
+                )
+                results.append(
+                    {
+                        "answer": answer,
+                        "score": hit.get("score", 0.0),
+                        "source": source,
+                        "text": hit.get("text", ""),
+                        "collection": collection_name,
+                        "metadata": metadata,
+                    }
+                )
+
+        results.sort(key=lambda item: item.get("score", 0.0), reverse=True)
+        return results[:limit]
+
     def _encode_text(self, text: str) -> List[float]:
-        """Encode text to embeddings (placeholder)."""
-        # Placeholder for actual embedding
-        # In production, use a proper embedding model like OpenAI or SentenceTransformers
+        """Encode text to embeddings using the configured provider."""
+        if self.embedding_provider == "openai" and self.embedding_api_key:
+            return self._encode_with_openai(text)
+        if self.embedding_provider not in {"deterministic", "openai"}:
+            logger.warning(
+                "Unknown embedding provider %s; using deterministic fallback",
+                self.embedding_provider,
+            )
+        return self._encode_deterministic(text)
+
+    def _encode_with_openai(self, text: str) -> List[float]:
+        """Encode text using an OpenAI-compatible embeddings endpoint."""
+        try:
+            response = httpx.post(
+                self.embedding_base_url,
+                headers={
+                    "Authorization": f"Bearer {self.embedding_api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "input": text,
+                    "model": self.embedding_model,
+                },
+                timeout=20.0,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            embeddings = payload["data"][0]["embedding"]
+            if embeddings:
+                self.vector_size = len(embeddings)
+            return embeddings
+        except Exception as exc:
+            logger.warning(
+                "OpenAI embedding request failed; using deterministic fallback: %s",
+                exc,
+            )
+            return self._encode_deterministic(text)
+
+    def _encode_deterministic(self, text: str) -> List[float]:
+        """Encode text with a deterministic fallback for local development."""
         import hashlib
 
-        # Simple hash-based embedding for demonstration
         hash_val = int(hashlib.md5(text.encode()).hexdigest(), 16)
         return [hash_val % 10000 / 10000.0] * self.vector_size
 
@@ -158,6 +251,6 @@ class QdrantClient:
         return None
 
 
-def get_qdrant_client(url: str) -> QdrantClient:
+def get_qdrant_client(url: Optional[str] = None) -> QdrantClient:
     """Get Qdrant client instance."""
-    return QdrantClient(url=url)
+    return QdrantClient(url=url or os.environ.get("QDRANT_URL", "http://localhost:6333"))

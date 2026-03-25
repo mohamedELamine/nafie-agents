@@ -1,5 +1,4 @@
-import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 from .. import db
@@ -24,7 +23,7 @@ def make_escalation_handler_node(helpscout_client, resend_client, redis_bus) -> 
 
             ticket_id = ticket.get("ticket_id", "unknown")
             escalation = {
-                "escalation_id": f"esc_{ticket_id}_{int(datetime.utcnow().timestamp())}",
+                "escalation_id": f"esc_{ticket_id}_{int(datetime.now(timezone.utc).timestamp())}",
                 "ticket_id": ticket_id,
                 "ticket_platform": ticket.get("platform", "helpscout"),
                 "escalation_reason": overall_level,
@@ -35,26 +34,39 @@ def make_escalation_handler_node(helpscout_client, resend_client, redis_bus) -> 
                     "order_id": ticket.get("order_id"),
                 },
                 "current_agent_context": f"risk_flags={risk_flags}",
-                "escalation_time": datetime.utcnow(),
+                "escalation_time": datetime.now(timezone.utc),
             }
 
             with get_conn() as conn:
                 db.save_escalation(conn, escalation)
 
-            helpscout_client.add_note(
-                ticket_id=ticket_id,
-                note=(
-                    f"تم رفع هذا السؤال إلى الإدارة.\n"
-                    f"التقييم: {overall_level}\n"
-                    f"الأسباب: {risk_flags}"
-                ),
-            )
+            if ticket.get("platform", "helpscout") == "helpscout":
+                helpscout_client.add_note(
+                    conversation_id=ticket_id,
+                    body=(
+                        f"تم رفع هذا السؤال إلى الإدارة.\n"
+                        f"التقييم: {overall_level}\n"
+                        f"الأسباب: {risk_flags}"
+                    ),
+                )
 
-            admin_email = os.environ.get("SUPPORT_ADMIN_EMAIL", "admin@example.com")
-            resend_client.send(
-                to=admin_email,
-                subject=f"Escalation: {ticket_id}",
-                text=_format_escalation_email(escalation),
+            resend_client.send_escalation_alert(
+                escalation_id=escalation["escalation_id"],
+                ticket_id=ticket_id,
+                reason=overall_level,
+                original_message=escalation["original_message"],
+                customer_identity=escalation["customer_identity"],
+                current_agent_context=escalation["current_agent_context"],
+            )
+            redis_bus.publish_message(
+                "support:ticket_updates",
+                {
+                    "ticket_id": ticket_id,
+                    "platform": ticket.get("platform", "helpscout"),
+                    "status": "escalated",
+                    "risk_level": overall_level,
+                    "risk_flags": risk_flags,
+                },
             )
 
             logger.info(f"Escalated ticket {ticket_id} — level: {overall_level}")

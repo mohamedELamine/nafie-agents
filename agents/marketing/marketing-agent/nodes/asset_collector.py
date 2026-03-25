@@ -1,8 +1,8 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict
 
-from ..models import ContentSnapshot, AssetSnapshot
-from ..state import MarketingState, update_state_with_content, update_state_with_assets
+from ..models import AssetSnapshot
+from ..state import MarketingState, update_state_with_assets
 from ..logging_config import get_logger
 
 logger = get_logger("nodes.asset_collector")
@@ -33,15 +33,15 @@ def make_asset_collector_node() -> callable:
 
             # Create asset snapshot
             assets_snapshot = AssetSnapshot(
-                asset_id=f"assets_{state.current_campaign.campaign_id}_{int(datetime.utcnow().timestamp())}",
+                asset_id=f"assets_{state.current_campaign.campaign_id}_{int(datetime.now(timezone.utc).timestamp())}",
                 campaign_id=state.current_campaign.campaign_id,
                 asset_data={
                     "campaign_id": state.current_campaign.campaign_id,
                     "theme_slug": state.current_campaign.theme_slug,
-                    "frozen_at": datetime.utcnow().isoformat(),
+                    "frozen_at": datetime.now(timezone.utc).isoformat(),
                     "data": {},
                 },
-                snapshot_date=datetime.utcnow(),
+                snapshot_date=datetime.now(timezone.utc),
             )
 
             # Update state

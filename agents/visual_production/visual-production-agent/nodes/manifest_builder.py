@@ -1,6 +1,8 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any
+
+from core.contracts import EVENT_THEME_ASSETS_READY, STREAM_ASSET_EVENTS
 
 logger = logging.getLogger("visual_production.manifest_builder")
 
@@ -13,6 +15,7 @@ class ManifestBuilderNode:
         self, batch_id: str, theme_slug: str, approved_assets: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Build final JSON manifest + publish event"""
+        published_assets = approved_assets.get("assets", [])
         processed = approved_assets.get("processed", {})
 
         # Build manifest
@@ -23,31 +26,34 @@ class ManifestBuilderNode:
             "assets": [],
             "total_cost": 0.0,
             "status": "published",
-            "published_at": datetime.utcnow().isoformat(),
+            "published_at": datetime.now(timezone.utc).isoformat(),
         }
 
-        for asset_type, asset in processed.items():
-            asset_id = f"{batch_id}_{asset_type}"
-            manifest["assets"].append(
-                {
-                    "asset_id": asset_id,
-                    "type": asset_type,
-                    "url": f"/assets/{asset_type}/{asset_id}.webp",
-                    "dimensions": asset["dimensions"],
-                    "size_kb": asset["size_kb"],
-                    "quality_score": asset["quality_score"],
-                }
-            )
+        if published_assets:
+            manifest["assets"] = list(published_assets)
+        else:
+            for asset_type, asset in processed.items():
+                asset_id = f"{batch_id}_{asset_type}"
+                manifest["assets"].append(
+                    {
+                        "asset_id": asset_id,
+                        "type": asset_type,
+                        "url": f"/assets/{asset_type}/{asset_id}.webp",
+                        "dimensions": asset["dimensions"],
+                        "size_kb": asset["size_kb"],
+                        "quality_score": asset["quality_score"],
+                    }
+                )
 
         # Build event
         event = await self.redis.build_event(
-            event_type="THEME_ASSETS_READY",
+            event_type=EVENT_THEME_ASSETS_READY,
             data={"batch_id": batch_id, "theme_slug": theme_slug, "assets": manifest["assets"]},
             source="visual_production_agent",
         )
 
         # Publish event
-        await self.redis.publish(channel="product-events", message=event)
+        await self.redis.publish_stream(stream_name=STREAM_ASSET_EVENTS, data=event)
 
         logger.info(f"Published THEME_ASSETS_READY for batch {batch_id}")
 
@@ -56,6 +62,7 @@ class ManifestBuilderNode:
             "status": "published",
             "assets_count": len(manifest["assets"]),
             "event_published": True,
+            "manifest": manifest,
         }
 
 

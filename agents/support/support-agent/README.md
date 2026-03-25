@@ -1,24 +1,25 @@
 # Support Agent
 
-Smart support agent for HelpScout, Facebook, and Phone support.
+وكيل دعم ذكي يركّز حاليًا على HelpScout وFacebook ضمن نفس مسار التصنيف والاسترجاع والرد، بينما Phone support ما يزال غير مكتمل wiring بعد.
 
 ## Features
 
-- **Multi-Platform Support**: HelpScout, Facebook Comments, Phone calls
+- **Primary Flow**: HelpScout webhook -> classify -> retrieve -> answer / escalate
 - **Two-Layer Classification**: Intent + Risk analysis using Claude
 - **Knowledge Base**: Qdrant-powered retrieval system
 - **Smart Escalation**: Automatic escalation when confidence < 0.50
 - **Constitutional Principles**: Built-in guidelines for responsible AI
+- **Redis Integration**: Emits support updates and escalations through the shared bus
 
 ## Architecture
 
 ### Nodes
 
 1. **TicketReceiver**: Initializes state and fetches ticket details
-2. **IntentClassifier**: Classifies intent (billing/technical/general)
-3. **RiskFlagger**: Identifies risk factors and overall risk level
-4. **KnowledgeRetriever**: Retrieves answers from Qdrant based on intent
-5. **DisclaimerAdder**: Adds mandatory Arabic disclaimer
+2. **IntentClassifier**: Classifies intent using Claude
+3. **KnowledgeRetriever**: Retrieves answers from Qdrant based on intent
+4. **DisclaimerAdder**: Adds mandatory Arabic disclaimer
+5. **RiskFlagger**: Identifies risk factors and overall risk level
 6. **TicketUpdater**: Updates ticket in HelpScout
 7. **EscalationHandler**: Handles escalated tickets with email notifications
 
@@ -33,11 +34,11 @@ Smart support agent for HelpScout, Facebook, and Phone support.
 
 ### Prerequisites
 
-- Python 3.10+
+- Python 3.12+
 - PostgreSQL 14+
 - Qdrant 1.6+
 - Redis 7+
-- OpenAI API key
+- Anthropic API key
 
 ### Setup
 
@@ -74,8 +75,8 @@ POSTGRES_DB=support_agent
 REDIS_HOST=localhost
 REDIS_PORT=6379
 
-# OpenAI
-OPENAI_API_KEY=sk-your-openai-api-key
+# Anthropic
+ANTHROPIC_API_KEY=sk-ant-your-anthropic-api-key
 
 # HelpScout
 HELPSCOUT_API_KEY=your-helpscout-api-key
@@ -85,8 +86,10 @@ HELPSCOUT_APP_ID=your-helpscout-app-id
 RESEND_API_KEY=re_...-...
 
 # Qdrant
-QDRANT_HOST=localhost
-QDRANT_PORT=6333
+QDRANT_URL=http://localhost:6333
+
+# Facebook (optional / partial flow)
+META_ACCESS_TOKEN=...
 
 # Application
 DEBUG=false
@@ -98,7 +101,7 @@ ENVIRONMENT=development
 ### Run the Agent
 
 ```bash
-python main.py
+python agents/support/agent.py
 ```
 
 ### Run the API
@@ -113,11 +116,11 @@ uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 ./db/migrations/run.sh
 ```
 
-### Setup Qdrant
+### Current Implementation Notes
 
-```bash
-./qdrant/setup.sh
-```
+- HelpScout and Facebook now share the same triage pipeline.
+- Qdrant retrieval now supports OpenAI-compatible embeddings via `OPENAI_API_KEY` or `SUPPORT_EMBEDDING_*`; deterministic embeddings remain only as a local fallback.
+- The agent uses Claude, not OpenAI.
 
 ## API Endpoints
 
@@ -173,7 +176,7 @@ support-agent/
 ### Docker Deployment
 
 ```bash
-docker-compose up -d
+docker compose up -d support
 ```
 
 ### Dockerfile
@@ -209,12 +212,10 @@ docker run -d --name redis \
 
 ### Qdrant Connection Issues
 
-Make sure Qdrant is running:
+Make sure Qdrant is running and `QDRANT_URL` points to it:
 
 ```bash
-docker run -d --name qdrant \
-  -p 6333:6333 \
-  qdrant/qdrant:latest
+docker run -d --name qdrant -p 6333:6333 qdrant/qdrant:latest
 ```
 
 ## Contributing

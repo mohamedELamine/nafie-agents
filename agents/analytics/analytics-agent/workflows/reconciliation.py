@@ -1,11 +1,9 @@
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timedelta, timezone
 
 from ..db import event_store
-from ..db import metric_store
-from ..db import signal_store
+from ..db.connection import get_conn
 from ..logging_config import get_logger
-from ..models import AttributionConfidence
+from ..services.lemon_squeezy_client import LemonSqueezyClient
 
 logger = get_logger("workflows.reconciliation")
 
@@ -14,19 +12,19 @@ def reconcile_sales_data() -> None:
     """Reconcile sales data between Lemon Squeezy and Redis events."""
     try:
         logger.info("Starting sales data reconciliation...")
+        ls_client = LemonSqueezyClient(api_key=__import__("os").getenv("LS_API_KEY", ""))
 
         # Get orders from Lemon Squeezy for the last 7 days
-        ls_orders = __import__("services.lemon_squeezy_client").get_orders(
-            api_key=__import__("os").getenv("LS_API_KEY", ""),
-            since=datetime.utcnow() - timedelta(days=7),
-        )
+        ls_orders = ls_client.get_orders(since=datetime.now(timezone.utc) - timedelta(days=7))
 
         # Get existing sale events from Redis
-        redis_sales = event_store.get_events(
-            event_type="NEW_SALE",
-            since=datetime.utcnow() - timedelta(days=7),
-            limit=1000,
-        )
+        with get_conn() as conn:
+            redis_sales = event_store.get_events(
+                conn=conn,
+                event_type="NEW_SALE",
+                since=datetime.now(timezone.utc) - timedelta(days=7),
+                limit=1000,
+            )
 
         # Create a set of Redis sale IDs
         redis_sale_ids = {
@@ -59,35 +57,27 @@ def reconcile_sales_data() -> None:
         for order_id in missing_in_redis:
             try:
                 # Get order details
-                order = __import__("services.lemon_squeezy_client").get_order(
-                    api_key=__import__("os").getenv("LS_API_KEY", ""),
-                    order_id=order_id,
-                )
+                order = ls_client.get_order(order_id=order_id)
 
                 if order:
                     sale_data = order.get("attributes", {})
 
                     # Backfill sale
-                    event_store.backfill_sale(
-                        conn=__import__("psycopg2").connect(
-                            "postgresql://analytics:password@localhost:5432/analytics_db"
-                        ),
-                        sale_id=order_id,
-                        sale_date=datetime.fromisoformat(
-                            sale_data.get("occurred_at", datetime.utcnow().isoformat())
-                        ),
-                        theme_slug=sale_data.get("first_order_item", {})
-                        .get("product", {})
-                        .get("slug", "unknown"),
-                        amount_usd=float(
-                            sale_data.get("attributes", {}).get("price", 0)
-                        ),
-                        license_tier=sale_data.get("attributes", {})
-                        .get("checkout_data", {})
-                        .get("meta", {})
-                        .get("customData", {})
-                        .get("license_tier", "free"),
-                    )
+                    with get_conn() as conn:
+                        event_store.backfill_sale(
+                            conn=conn,
+                            sale_id=order_id,
+                            sale_date=datetime.fromisoformat(
+                                sale_data.get("occurred_at", datetime.now(timezone.utc).isoformat())
+                            ),
+                            theme_slug=sale_data.get("first_order_item", {})
+                            .get("product", {})
+                            .get("slug", "unknown"),
+                            amount_usd=float(sale_data.get("total", sale_data.get("subtotal", 0) or 0)),
+                            license_tier=sale_data.get("checkout_data", {})
+                            .get("custom", {})
+                            .get("license_tier", "free"),
+                        )
                     backfill_count += 1
                     logger.info(f"Backfilled sale: {order_id}")
 

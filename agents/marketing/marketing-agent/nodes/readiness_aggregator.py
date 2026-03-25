@@ -1,9 +1,8 @@
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timezone
+from typing import Any, Dict
 
-from ..db import marketing_calendar
 from ..logging_config import get_logger
-from ..state import MarketingState, make_initial_state
+from ..state import MarketingState
 
 logger = get_logger("nodes.readiness_aggregator")
 
@@ -30,7 +29,7 @@ def make_readiness_aggregator_node(redis) -> callable:
             product_live = False
             if state.product_launch_date:
                 hours_since_launch = (
-                    datetime.utcnow() - state.product_launch_date
+                    datetime.now(timezone.utc) - state.product_launch_date
                 ).total_seconds() / 3600
                 product_live = hours_since_launch <= 48  # 48 hours timeout
 
@@ -63,7 +62,7 @@ def make_readiness_aggregator_node(redis) -> callable:
                 if state.product_launch_date
                 else None,
                 "time_since_launch": (
-                    (datetime.utcnow() - state.product_launch_date).total_seconds()
+                    (datetime.now(timezone.utc) - state.product_launch_date).total_seconds()
                     / 3600
                     if state.product_launch_date
                     else None

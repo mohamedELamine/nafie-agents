@@ -5,7 +5,6 @@ Node: EVIDENCE_GATE
 """
 from __future__ import annotations
 import logging
-import json
 from state import ContentState
 from models import ContentType
 

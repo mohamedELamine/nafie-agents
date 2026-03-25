@@ -1,8 +1,7 @@
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional
 
 import psycopg2
-from psycopg2 import sql
 
 from ..logging_config import get_logger
 
@@ -19,12 +18,7 @@ def save_report(conn: psycopg2.extensions.connection, report: Dict[str, Any]) ->
                     report_id, period_start, period_end, total_sales,
                     total_revenue, highlights, concerns, generated_at
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (report_id) DO UPDATE SET
-                    total_sales = EXCLUDED.total_sales,
-                    total_revenue = EXCLUDED.total_revenue,
-                    highlights = EXCLUDED.highlights,
-                    concerns = EXCLUDED.concerns,
-                    generated_at = EXCLUDED.generated_at
+                ON CONFLICT (report_id) DO NOTHING
                 """,
                 (
                     report["report_id"],
@@ -34,7 +28,7 @@ def save_report(conn: psycopg2.extensions.connection, report: Dict[str, Any]) ->
                     report["total_revenue"],
                     str(report["highlights"]),
                     str(report["concerns"]),
-                    datetime.utcnow(),
+                    datetime.now(timezone.utc),
                 ),
             )
             conn.commit()

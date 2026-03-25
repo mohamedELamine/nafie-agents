@@ -1,8 +1,7 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import psycopg2
-from psycopg2 import sql
 
 from ..logging_config import get_logger
 
@@ -50,7 +49,7 @@ def signal_sent_recently(
     """Check if a signal was sent recently. theme_slug=None matches global signals."""
     try:
         with conn.cursor() as cursor:
-            cutoff = datetime.utcnow() - timedelta(hours=hours)
+            cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
 
             if theme_slug is None:
                 cursor.execute(
@@ -90,7 +89,7 @@ def mark_signal_sent(conn: psycopg2.extensions.connection, signal_id: str) -> No
                 SET sent_at = %s 
                 WHERE signal_id = %s
                 """,
-                (datetime.utcnow(), signal_id),
+                (datetime.now(timezone.utc), signal_id),
             )
             conn.commit()
             logger.debug(f"Marked signal as sent: {signal_id}")

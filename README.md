@@ -2,7 +2,7 @@
 
 ## نظرة عامة
 
-منظومة أعمال متكاملة مدفوعة بالذكاء الاصطناعي لإنتاج وبيع وصيانة قوالب WordPress العربية الاحترافية. تتألف من سبعة وكلاء متخصصين يتنسقهم مشرف مركزي، يعملون عبر حافلة أحداث Redis المشتركة.
+منظومة أعمال متكاملة مدفوعة بالذكاء الاصطناعي لإنتاج وبيع وصيانة قوالب WordPress العربية الاحترافية. تتألف من سبعة وكلاء متخصصين يتنسقهم مشرف مركزي، مع واجهة API مستقلة للمشرف، ويعملون عبر Redis Pub/Sub وRedis Streams بعقود مشتركة في [core/contracts.py](core/contracts.py).
 
 ---
 
@@ -34,26 +34,34 @@
 
 | الوكيل | المجلد | الحالة | المهمة |
 |--------|--------|--------|--------|
-| وكيل البناء | `agents/builder/` | ✅ مكتمل (راجع مجلده) | توليد قوالب WordPress عربية |
-| وكيل المنصة | `agents/platform/` | 🔨 قيد البناء | إدارة متجر WooCommerce |
-| وكيل الدعم | `agents/support/` | 🔨 قيد البناء | دعم العملاء بالعربية |
-| وكيل المحتوى | `agents/content/` | 🔨 قيد البناء | إنتاج المحتوى التسويقي |
-| وكيل التسويق | `agents/marketing/` | 🔨 قيد البناء | الحملات والتواصل الاجتماعي |
-| وكيل التحليل | `agents/analytics/` | 🔨 قيد البناء | التقارير والذكاء التجاري |
-| وكيل الإنتاج البصري | `agents/visual_production/` | 🔨 قيد البناء | توليد المرئيات والفيديو |
-| وكيل المدير العام | `supervisor/` | 🔨 قيد البناء | التنسيق والإشراف |
+| وكيل البناء | `agents/builder/` | ✅ ناضج نسبيًا | توليد قوالب WordPress عربية |
+| وكيل المنصة | `agents/platform/` | 🟡 متوسط | إدارة متجر WooCommerce |
+| وكيل الدعم | `agents/support/` | 🟡 متوسط مبدئي | دعم العملاء بالعربية |
+| وكيل المحتوى | `agents/content/` | 🟡 متوسط | إنتاج المحتوى التسويقي |
+| وكيل التسويق | `agents/marketing/` | 🟡 متوسط | الحملات والتواصل الاجتماعي |
+| وكيل التحليل | `agents/analytics/` | 🟢 جيد | التقارير والذكاء التجاري |
+| وكيل الإنتاج البصري | `agents/visual_production/` | 🟡 متوسط مبدئي | توليد المرئيات والفيديو |
+| وكيل المدير العام | `supervisor/` | 🟡 متوسط مبدئي | التنسيق والإشراف |
 
 ---
 
 ## البنية التقنية
 
 - **التنسيق:** LangGraph (كل وكيل رسم بياني مستقل)
-- **الاتصال:** Redis Pub/Sub (حافلة الأحداث)
+- **الاتصال:** Redis Pub/Sub + Redis Streams
 - **النماذج:** Claude API · Gemini · GLM · Flux 2 Pro · Ideogram V3 · Kling AI · Pika Labs
 - **الواجهة:** FastAPI
 - **التخزين:** PostgreSQL (بيانات الأعمال) + Redis (الأحداث والحالة المؤقتة)
 - **المراقبة:** LangSmith
-- **التنشر:** VPS (Docker Compose)
+- **التشغيل:** Python 3.12 + Docker Compose
+
+---
+
+## العقود المشتركة الحالية
+
+- **Streams الأساسية:** `theme-events`, `product-events`, `asset-events`, `content-events`, `marketing-events`, `support-events`, `builder-events`, `analytics:signals`
+- **أحداث رئيسية:** `THEME_APPROVED`, `NEW_PRODUCT_LIVE`, `THEME_ASSETS_READY`, `CONTENT_READY`, `CONTENT_PRODUCED`, `ANALYTICS_SIGNAL`, `CAMPAIGN_LAUNCHED`, `POST_PUBLISHED`
+- **المصدر الرسمي للعقود:** [core/contracts.py](core/contracts.py)
 
 ---
 
@@ -132,11 +140,17 @@ cp .env.example .env
 # تعديل .env بمفاتيح API الخاصة بك
 
 # تشغيل المنظومة كاملة
-docker-compose up -d
+docker compose up -d --build
 
 # أو تشغيل وكيل بعينه
-docker-compose up -d supervisor platform support
+docker compose up -d supervisor supervisor_api platform support
 ```
+
+ملاحظات تشغيلية:
+
+- ملف `.env` مطلوب قبل التشغيل الكامل، خصوصًا مفاتيح `POSTGRES_PASSWORD` و`ANTHROPIC_API_KEY`.
+- `supervisor_api` هو المسار الذي يمر عبره `nginx` حاليًا.
+- أفضل تحقق سريع بعد الإقلاع هو `docker compose config` ثم فحص `/health` لكل API فعلي.
 
 ---
 

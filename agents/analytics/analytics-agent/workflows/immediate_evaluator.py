@@ -5,9 +5,10 @@ Immediate Evaluator — يعمل بجانب Event Collector.
 """
 import os
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
+from core.contracts import EVENT_ANALYTICS_SIGNAL, STREAM_ANALYTICS_SIGNALS
 from ..db import event_store, signal_store
 from ..db.connection import get_conn
 from ..logging_config import get_logger
@@ -18,6 +19,9 @@ logger = get_logger("workflows.immediate_evaluator")
 
 
 class ImmediateEvaluator:
+    def evaluate(self, event: Dict[str, Any]) -> None:
+        """Backward-compatible entry point used by the agent runtime."""
+        self.on_new_event(event)
 
     def on_new_event(self, event: Dict[str, Any]) -> None:
         """
@@ -80,7 +84,7 @@ class ImmediateEvaluator:
         المصدر: SUPPORT_TICKET_ESCALATED (لا RESOLVED).
         """
         threshold = IMMEDIATE_THRESHOLDS["support_surge"]["threshold"]  # 10
-        since     = datetime.utcnow() - timedelta(hours=24)
+        since     = datetime.now(timezone.utc) - timedelta(hours=24)
 
         with get_conn() as conn:
             count = event_store.count_events(
@@ -110,7 +114,7 @@ class ImmediateEvaluator:
         """
         from ..services.product_registry import get_all_published_slugs, get_launch_date
 
-        threshold_date = datetime.utcnow() - timedelta(
+        threshold_date = datetime.now(timezone.utc) - timedelta(
             days=IMMEDIATE_THRESHOLDS["no_sales_days"]["threshold"]
         )
 
@@ -134,7 +138,7 @@ class ImmediateEvaluator:
                     if not signal_store.signal_sent_recently(
                         conn, "no_output_alert", theme_slug, hours=24
                     ):
-                        days_since = (datetime.utcnow() - reference_date).days
+                        days_since = (datetime.now(timezone.utc) - reference_date).days
                         _emit_signal(
                             signal_type  = SignalType.NO_OUTPUT_ALERT,
                             theme_slug   = theme_slug,
@@ -149,7 +153,7 @@ class ImmediateEvaluator:
         فحص: انخفاض > 50% مقارنة بالأسبوع الماضي.
         يعتمد على occurred_at.
         """
-        now           = datetime.utcnow()
+        now           = datetime.now(timezone.utc)
         this_week_start = now - timedelta(days=7)
         last_week_start = now - timedelta(days=14)
 
@@ -200,7 +204,7 @@ class ImmediateEvaluator:
         فحص: حملات أُطلقت منذ > 24 ساعة بدون منشور.
         """
         threshold_hours = IMMEDIATE_THRESHOLDS["campaign_no_output_hours"]["threshold"]
-        cutoff          = datetime.utcnow() - timedelta(hours=threshold_hours)
+        cutoff          = datetime.now(timezone.utc) - timedelta(hours=threshold_hours)
 
         with get_conn() as conn:
             launched = event_store.get_events(
@@ -252,11 +256,10 @@ def _emit_signal(
     يُنشئ الإشارة، يُخزّنها، ويُرسلها على القناة الصحيحة.
     يقبل conn اختيارياً — يفتح واحداً جديداً إن لم يُعطَ.
     """
-    import json, os
     from ..services.redis_bus import get_redis_bus
 
     signal_id = str(uuid.uuid4())
-    now       = datetime.utcnow()
+    now       = datetime.now(timezone.utc)
 
     signal_dict = {
         "signal_id":    signal_id,
@@ -279,11 +282,14 @@ def _emit_signal(
 
         redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
         bus       = get_redis_bus(redis_url)
-        bus.publish("analytics_events", {
-            "event_type": "ANALYTICS_SIGNAL",
-            "source":     "analytics_agent",
-            "data":       signal_dict,
-        })
+        bus.publish_stream(
+            STREAM_ANALYTICS_SIGNALS,
+            {
+                "event_type": EVENT_ANALYTICS_SIGNAL,
+                "source": "analytics_agent",
+                **signal_dict,
+            },
+        )
         logger.info(f"Signal emitted: {signal_type.value} → {target_agent}")
 
     if conn is not None:

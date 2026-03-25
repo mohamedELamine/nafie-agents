@@ -1,7 +1,5 @@
 import logging
 import asyncio
-from typing import Optional, Dict, Any
-import json
 from redis_bus import redis_bus
 from workflows.orchestrator import orchestrator
 from agent_registry import AGENT_REGISTRY
@@ -10,8 +8,9 @@ logger = logging.getLogger("supervisor.command_listener")
 
 
 class CommandListener:
-    def __init__(self):
+    def __init__(self, resend_client=None):
         self.running = False
+        self.resend = resend_client
 
     async def start(self):
         """Start listening for command events"""
@@ -45,7 +44,6 @@ class CommandListener:
     async def _consume_commands(self):
         """Consume commands from Redis"""
         try:
-            from workflow_definitions import WorkflowType
 
             message = await redis_bus.read_group(
                 channel="workflow_commands", group="supervisor", consumer="command_listener"
@@ -69,7 +67,6 @@ class CommandListener:
     async def _process_command(self, message: dict):
         """Process incoming command"""
         try:
-            from models import EventEnvelope
 
             event_type = message["data"].get("event_type", "")
             event_data = message["data"].get("data", {})
@@ -186,8 +183,6 @@ class CommandListener:
         """Handle policy update command"""
         try:
             from db.policy_store import policy_store
-            from datetime import datetime
-            import uuid
 
             policy_id = data.get("policy_id")
             policy_data = data.get("policy_data", {})
@@ -226,8 +221,11 @@ class CommandListener:
             alert_type = data.get("alert_type")
             details = data.get("details", {})
 
-            if alert_type and "resend" in globals():
-                await resend.send_critical_system_alert(alert_type=alert_type, details=details)
+            if alert_type and self.resend:
+                await self.resend.send_critical_system_alert(
+                    alert_type=alert_type,
+                    details=details,
+                )
 
             logger.warning(f"Processed critical alert: {alert_type}")
 

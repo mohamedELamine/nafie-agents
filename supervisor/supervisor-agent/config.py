@@ -1,10 +1,12 @@
+import os
+
 from pydantic_settings import BaseSettings
 from typing import Optional
 
 
 class Settings(BaseSettings):
     # Database
-    database_url: str = "postgresql://postgres:postgres@localhost:5432/supervisor"
+    database_url: str = ""
 
     # Redis
     redis_host: str = "localhost"

@@ -1,6 +1,5 @@
 import resend
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from ..logging_config import get_logger
 
@@ -25,13 +24,12 @@ class ResendClient:
         """Send critical alert to owner with retry."""
         for attempt in range(retry):
             try:
-                response = resend.Emails.send(
-                    from="onboarding@resend.dev",
-                    to=[self.owner_email],
-                    subject=subject,
-                    html=body,
-                    template_data=template_data,
-                )
+                response = resend.Emails.send({
+                    "from": "onboarding@resend.dev",
+                    "to": [self.owner_email],
+                    "subject": subject,
+                    "html": body,
+                })
 
                 if response.id:
                     logger.info(f"Sent owner alert: {response.id}")
@@ -57,13 +55,12 @@ class ResendClient:
         """Send weekly report to owner with retry."""
         for attempt in range(retry):
             try:
-                response = resend.Emails.send(
-                    from="onboarding@resend.dev",
-                    to=[self.owner_email],
-                    subject=subject,
-                    html=html_content,
-                    template_data=template_data,
-                )
+                response = resend.Emails.send({
+                    "from": "onboarding@resend.dev",
+                    "to": [self.owner_email],
+                    "subject": subject,
+                    "html": html_content,
+                })
 
                 if response.id:
                     logger.info(f"Sent weekly report: {response.id}")
@@ -91,6 +88,25 @@ def send_owner_alert(
     """Send critical alert to owner."""
     client = ResendClient(api_key, owner_email)
     return client.send_owner_alert(subject, body, template_data, retry)
+
+
+def send_owner_critical_alert(
+    api_key: str,
+    owner_email: str,
+    subject: str,
+    body: str,
+    template_data: Optional[Dict[str, Any]] = None,
+    retry: int = 3,
+) -> bool:
+    """Backward-compatible alias used by signal generation."""
+    return send_owner_alert(
+        api_key=api_key,
+        owner_email=owner_email,
+        subject=subject,
+        body=body,
+        template_data=template_data,
+        retry=retry,
+    )
 
 
 def send_weekly_report(

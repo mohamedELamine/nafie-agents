@@ -1,6 +1,6 @@
 # Supervisor Agent
 
-Supervisor agent for coordinating large-scale workflows with event-driven architecture, conflict resolution, and health monitoring.
+Supervisor agent for coordinating large-scale workflows with event-driven architecture, conflict resolution, health monitoring, and an API wrapper used by the root `docker compose` setup.
 
 ## Features
 
@@ -104,6 +104,9 @@ LOG_LEVEL=INFO
 
 ```bash
 python main.py
+
+# Or from the repository root
+python supervisor/agent.py
 ```
 
 ### Production Mode

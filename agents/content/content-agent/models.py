@@ -7,7 +7,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional, Union
@@ -158,6 +158,8 @@ TECHNICAL_TERMS_KEEP = {
     "WordPress", "WooCommerce", "RTL", "FSE",
     "Gutenberg", "PHP", "CSS", "HTML", "API", "COD",
 }
+
+BRAND_CONSTITUTION_VERSION = "1.0"
 
 
 # ══════════════════════════════════════════════

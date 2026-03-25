@@ -1,6 +1,5 @@
 import os
 import logging
-from typing import Optional
 
 logger = logging.getLogger("visual_production.resend_client")
 
@@ -19,6 +18,9 @@ class ResendClient:
         total_cost: float,
     ) -> bool:
         """Send visual review request email"""
+        if not self.api_key:
+            logger.warning("RESEND_API_KEY missing; skipping visual review email")
+            return True
         try:
             # Build HTML content
             html_content = f"""
@@ -54,7 +56,7 @@ class ResendClient:
 
             response = resend.Emails.send(
                 {
-                    "from": "Visual Production <no-reply@yourdomain.com>",
+                    "from": f"Visual Production <{os.environ.get('RESEND_FROM_EMAIL', 'no-reply@example.com')}>",
                     "to": [to_email],
                     "subject": f"Visual Assets Review: {theme_slug} v{version}",
                     "html": html_content,
@@ -72,6 +74,9 @@ class ResendClient:
         self, to_email: str, batch_id: str, error_message: str, theme_slug: str
     ) -> bool:
         """Send batch failure alert"""
+        if not self.api_key:
+            logger.warning("RESEND_API_KEY missing; skipping batch failure email")
+            return True
         try:
             html_content = f"""
             <html>
@@ -89,7 +94,7 @@ class ResendClient:
 
             response = resend.Emails.send(
                 {
-                    "from": "Visual Production <no-reply@yourdomain.com>",
+                    "from": f"Visual Production <{os.environ.get('RESEND_FROM_EMAIL', 'no-reply@example.com')}>",
                     "to": [to_email],
                     "subject": f"Visual Production Failed: {batch_id}",
                     "html": html_content,
@@ -112,6 +117,9 @@ class ResendClient:
         rejected_count: int,
     ) -> bool:
         """Send batch completion notification"""
+        if not self.api_key:
+            logger.warning("RESEND_API_KEY missing; skipping batch completion email")
+            return True
         try:
             html_content = f"""
             <html>
@@ -130,7 +138,7 @@ class ResendClient:
 
             response = resend.Emails.send(
                 {
-                    "from": "Visual Production <no-reply@yourdomain.com>",
+                    "from": f"Visual Production <{os.environ.get('RESEND_FROM_EMAIL', 'no-reply@example.com')}>",
                     "to": [to_email],
                     "subject": f"Visual Assets Batch Completed: {batch_id}",
                     "html": html_content,

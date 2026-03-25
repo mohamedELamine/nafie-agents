@@ -2,15 +2,20 @@
 Analytics Agent API
 FastAPI app مع lifespan كامل: DB pool + services + scheduler + event_collector.
 """
+import os
+import sys
 import threading
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import JSONResponse
 
-from ..db import (
+# Ensure the agent root is on sys.path so absolute imports work
+# when launched via `uvicorn api.main:app`.
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+from db import (
     attribution_store,
     event_store,
     metric_store,
@@ -19,12 +24,11 @@ from ..db import (
     report_store,
     signal_store,
 )
-from ..db.connection import close_pool, get_conn, init_pool
-from ..logging_config import configure_logging, get_logger
-from ..metric_definitions import get_all_metric_keys
-from ..models import SignalOutcome
-from ..scheduler import start_scheduler
-from ..workflows.event_collector import start_event_collector
+from db.connection import close_pool, get_conn, init_pool
+from logging_config import configure_logging, get_logger
+from models import SignalOutcome
+from scheduler import start_scheduler
+from workflows.event_collector import start_event_collector
 
 configure_logging()
 logger = get_logger("api.main")
@@ -72,7 +76,7 @@ app = FastAPI(
 
 @app.get("/health")
 async def health_check() -> Dict[str, str]:
-    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
 # ── Dashboard ────────────────────────────────────────────────────────────────
@@ -81,7 +85,7 @@ async def health_check() -> Dict[str, str]:
 async def get_dashboard() -> Dict[str, Any]:
     """آخر signals + آخر metrics + ملخص."""
     try:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         since_30d = now - timedelta(days=30)
 
         with get_conn() as conn:
@@ -206,7 +210,7 @@ async def record_signal_outcome(
                 success_score = 0.3
 
         outcome = SignalOutcome(
-            outcome_id          = f"out_{signal_id[:8]}_{int(datetime.utcnow().timestamp())}",
+            outcome_id          = f"out_{signal_id[:8]}_{int(datetime.now(timezone.utc).timestamp())}",
             signal_id           = signal_id,
             target_agent        = "",       # سيُملأ من الـ signal في DB
             action_taken        = action_taken,
@@ -215,7 +219,7 @@ async def record_signal_outcome(
             after_value         = after_value,
             outcome_window_days = 7,
             success_score       = success_score,
-            evaluated_at        = datetime.utcnow(),
+            evaluated_at        = datetime.now(timezone.utc),
             notes               = notes,
         )
 

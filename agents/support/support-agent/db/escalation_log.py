@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import psycopg2
@@ -20,9 +20,7 @@ def save_escalation(
                     escalation_id, ticket_id, ticket_platform, escalation_reason,
                     original_message, customer_identity, current_agent_context, escalation_time
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (escalation_id) DO UPDATE SET
-                    resolution_status = EXCLUDED.resolution_status,
-                    escalation_time = EXCLUDED.escalation_time
+                ON CONFLICT (escalation_id) DO NOTHING
                 """,
                 (
                     escalation["escalation_id"],
@@ -32,7 +30,7 @@ def save_escalation(
                     escalation["original_message"],
                     str(escalation["customer_identity"]),
                     escalation["current_agent_context"],
-                    datetime.utcnow(),
+                    datetime.now(timezone.utc),
                 ),
             )
             conn.commit()
@@ -50,7 +48,7 @@ def get_escalation_history(
     """Get escalation history."""
     try:
         with conn.cursor() as cursor:
-            cutoff = datetime.utcnow() - timedelta(days=days)
+            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
             if ticket_id:
                 cursor.execute(
@@ -87,7 +85,7 @@ def get_escalations_by_reason(
     """Get escalations by reason."""
     try:
         with conn.cursor() as cursor:
-            cutoff = datetime.utcnow() - timedelta(days=days)
+            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
             cursor.execute(
                 """

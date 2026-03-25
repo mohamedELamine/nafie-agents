@@ -1,17 +1,16 @@
+import asyncio
 import os
-import signal
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.cron import CronTrigger
 
 from ..logging_config import configure_logging, get_logger
+from .db.connection import close_pool, init_pool, is_pool_initialized
 from .workflows.immediate_evaluator import ImmediateEvaluator
 from .workflows.metrics_engine import (
     metrics_engine_batch,
     daily_aggregation,
-    weekly_aggregation,
 )
 from .workflows.pattern_analyzer import run_pattern_analysis
 from .workflows.signal_generator import generate_signals_from_patterns
@@ -28,12 +27,17 @@ class AnalyticsScheduler:
         self.scheduler = AsyncIOScheduler(timezone="UTC")
         self.immediate_evaluator = ImmediateEvaluator()
         self.running = False
+        self._owns_db_pool = False
 
-    def start(self) -> None:
+    async def start(self) -> None:
         """Start the scheduler."""
         try:
             # Configure logging
             configure_logging(os.getenv("LOG_LEVEL", "INFO"))
+
+            if not is_pool_initialized():
+                init_pool(minconn=2, maxconn=10)
+                self._owns_db_pool = True
 
             # Add jobs
             self._add_jobs()
@@ -45,7 +49,7 @@ class AnalyticsScheduler:
             logger.info("Analytics scheduler started")
 
             # Keep running
-            self._run_until_interrupted()
+            await self._run_until_interrupted()
 
         except Exception as e:
             logger.error(f"Error starting scheduler: {e}")
@@ -141,7 +145,7 @@ class AnalyticsScheduler:
     async def _generate_weekly_report(self) -> None:
         """Generate and send weekly report."""
         try:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             start = now - timedelta(days=7)
             end = now
 
@@ -158,7 +162,7 @@ class AnalyticsScheduler:
     async def _generate_monthly_report(self) -> None:
         """Generate and send monthly report."""
         try:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             month = now.month
             year = now.year
 
@@ -172,11 +176,11 @@ class AnalyticsScheduler:
         except Exception as e:
             logger.error(f"Error generating monthly report: {e}")
 
-    def _run_until_interrupted(self) -> None:
+    async def _run_until_interrupted(self) -> None:
         """Keep the scheduler running until interrupted."""
         try:
             while self.running:
-                await __import__("asyncio").sleep(1)
+                await asyncio.sleep(1)
         except KeyboardInterrupt:
             logger.info("Received interrupt signal")
         finally:
@@ -188,16 +192,33 @@ class AnalyticsScheduler:
             if self.scheduler.running:
                 self.scheduler.shutdown()
             self.running = False
+            if self._owns_db_pool:
+                close_pool()
+                self._owns_db_pool = False
             logger.info("Analytics scheduler stopped")
         except Exception as e:
             logger.error(f"Error stopping scheduler: {e}")
 
 
-def main() -> None:
-    """Main entry point for the analytics scheduler."""
+def start_scheduler() -> AnalyticsScheduler:
+    """Create, configure, and start the analytics scheduler. Returns the instance."""
     scheduler = AnalyticsScheduler()
-    scheduler.start()
+    if not is_pool_initialized():
+        init_pool(minconn=2, maxconn=10)
+        scheduler._owns_db_pool = True
+    scheduler._add_jobs()
+    scheduler.scheduler.start()
+    scheduler.running = True
+    logger.info("Analytics scheduler started")
+    return scheduler
+
+
+async def main() -> None:
+    """Main entry point for the analytics scheduler."""
+    configure_logging(os.getenv("LOG_LEVEL", "INFO"))
+    scheduler = AnalyticsScheduler()
+    await scheduler.start()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

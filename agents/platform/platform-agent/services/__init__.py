@@ -1,7 +1,4 @@
-"""
-Services — التكاملات الخارجية
-TODO: تنفيذ كامل (راجع tasks/phase2_foundation.md § T020–T030)
-"""
+"""Platform integrations exposed at package level for graph assembly and API."""
 from .wp_client import WordPressClient
 from .ls_client import LemonSqueezyClient
 from .resend_client import ResendClient

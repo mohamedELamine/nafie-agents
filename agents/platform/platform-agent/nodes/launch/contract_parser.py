@@ -6,7 +6,7 @@ from __future__ import annotations
 import logging
 from db.idempotency import check_completed, mark_completed, mark_started
 from db.registry import ProductRegistry
-from state import LaunchState, PlatformStatus
+from state import LaunchState
 
 logger = logging.getLogger("platform_agent.nodes.launch.contract_parser")
 NODE_NAME = "CONTRACT_PARSER"
@@ -22,8 +22,10 @@ def make_contract_parser_node(registry: ProductRegistry):
         woo = contract.get("woocommerce_enabled", False)
         cod = contract.get("cod_enabled", False)
         sections = list(MANDATORY_SECTIONS)
-        if woo: sections.append("woocommerce_features")
-        if cod: sections.append("cod_features")
+        if woo:
+            sections.append("woocommerce_features")
+        if cod:
+            sections.append("cod_features")
         parsed = {
             "theme_name_ar": contract.get("theme_name_ar", state["theme_slug"]),
             "domain": contract.get("domain", "general"),

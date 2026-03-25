@@ -1,7 +1,8 @@
 import logging
 import json
-from datetime import datetime
 from typing import Optional, Dict, Any
+
+from core.contracts import build_ecosystem_event
 
 logger = logging.getLogger("visual_production.redis_bus")
 
@@ -29,8 +30,10 @@ class RedisBus:
         """Add data to a Redis stream"""
         try:
             await self._connect()
-            stream_key = f"streams:{stream_name}"
-            await self._redis.xadd(stream_key, data)
+            await self._redis.xadd(
+                stream_name,
+                {"data": json.dumps(data, default=str)},
+            )
             logger.info(f"Added to stream {stream_name}: {data}")
             return True
         except Exception as e:
@@ -38,15 +41,19 @@ class RedisBus:
             raise
 
     async def build_event(
-        self, event_type: str, data: Dict[str, Any], source: str = "visual_production_agent"
+        self,
+        event_type: str,
+        data: Dict[str, Any],
+        source: str = "visual_production_agent",
+        correlation_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Build an event with standard structure"""
-        return {
-            "event_type": event_type,
-            "data": data,
-            "source": source,
-            "timestamp": datetime.utcnow().isoformat(),
-        }
+        return build_ecosystem_event(
+            event_type=event_type,
+            data=data,
+            source=source,
+            correlation_id=correlation_id,
+        )
 
     async def checkpoint_save(self, key: str, data: Dict[str, Any], ttl: int = 48 * 3600):
         """Save checkpoint with TTL"""

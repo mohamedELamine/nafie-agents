@@ -1,11 +1,11 @@
 import json
-import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import redis
 from redis.exceptions import RedisError
 
+from core.contracts import build_ecosystem_event
 from ..logging_config import get_logger
 
 logger = get_logger("services.redis_bus")
@@ -25,17 +25,18 @@ class RedisBus:
         self.client = redis.from_url(redis_url, decode_responses=True)
         self._ensure_consumer_group()
 
-    def _ensure_consumer_group(self) -> None:
+    def _ensure_consumer_group(self, stream: Optional[str] = None) -> None:
         """Ensure the consumer group exists."""
         try:
+            stream_name = stream or self.EVENTS_CHANNEL
             # Create stream if not exists
-            if not self.client.exists(self.EVENTS_CHANNEL):
-                self.client.xadd(self.EVENTS_CHANNEL, {"init": "true"})
+            if not self.client.exists(stream_name):
+                self.client.xadd(stream_name, {"init": "true"})
 
             # Create consumer group if not exists
             try:
                 self.client.xgroup_create(
-                    self.EVENTS_CHANNEL,
+                    stream_name,
                     self.CONSUMER_GROUP,
                     id="0",
                     mkstream=True,
@@ -61,20 +62,34 @@ class RedisBus:
             logger.error(f"Error publishing to {channel}: {e}")
             return None
 
+    def publish_stream(self, stream: str, message: Dict[str, Any]) -> Optional[str]:
+        """Publish a message to a Redis stream using the shared envelope format."""
+        try:
+            self._ensure_consumer_group(stream)
+            payload = json.dumps(message, default=str)
+            message_id = self.client.xadd(stream, {"data": payload})
+            logger.debug(f"Published stream event to {stream}: {message.get('event_type')}")
+            return message_id
+        except RedisError as e:
+            logger.error(f"Error publishing to stream {stream}: {e}")
+            return None
+
     def build_event(
         self,
         event_type: str,
         campaign_id: str,
         data: Dict[str, Any],
+        theme_slug: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Build a marketing event."""
-        return {
-            "event_id": f"{event_type}_{int(datetime.utcnow().timestamp())}_{len(campaign_id)}",
-            "event_type": event_type,
-            "campaign_id": campaign_id,
-            "data": data,
-            "timestamp": datetime.utcnow().isoformat(),
-        }
+        event_data = {"campaign_id": campaign_id, **data}
+        if theme_slug:
+            event_data["theme_slug"] = theme_slug
+        return build_ecosystem_event(
+            event_type=event_type,
+            data=event_data,
+            source="marketing_agent",
+        )
 
     def create_checkpoint(
         self, campaign_id: str, checkpoint_data: Dict[str, Any]
@@ -82,7 +97,7 @@ class RedisBus:
         """Create a checkpoint for a campaign."""
         try:
             checkpoint_id = (
-                f"checkpoint_{campaign_id}_{int(datetime.utcnow().timestamp())}"
+                f"checkpoint_{campaign_id}_{int(datetime.now(timezone.utc).timestamp())}"
             )
 
             self.client.setex(
@@ -97,7 +112,7 @@ class RedisBus:
                     "checkpoint_id": checkpoint_id,
                     "campaign_id": campaign_id,
                     "data": checkpoint_data,
-                    "created_at": datetime.utcnow().isoformat(),
+                    "created_at": datetime.now(timezone.utc).isoformat(),
                 },
             )
 
@@ -121,6 +136,7 @@ class RedisBus:
         """Read messages from a stream using consumer group."""
         try:
             consumer = consumer_name or self.CONSUMER_NAME
+            self._ensure_consumer_group(stream)
 
             messages = self.client.xreadgroup(
                 groupname=self.CONSUMER_GROUP,
@@ -133,9 +149,15 @@ class RedisBus:
             events = []
             for stream_name, stream_messages in messages:
                 for message_id, data in stream_messages:
-                    # Store message ID for ack
-                    data["__message_id"] = message_id
-                    events.append(data)
+                    if "data" in data:
+                        try:
+                            parsed = json.loads(data["data"])
+                        except (TypeError, json.JSONDecodeError):
+                            parsed = dict(data)
+                    else:
+                        parsed = dict(data)
+                    parsed["__message_id"] = message_id
+                    events.append(parsed)
 
             return events
 

@@ -1,5 +1,4 @@
 from typing import Dict, Any
-from ..models import AssetType
 
 
 class BudgetCalculatorNode:

@@ -118,7 +118,7 @@ docker run -d --name visual-agent \
 
 - `GET /` - Service info
 - `GET /health` - Health check
-- `POST /review/{batch_key}` - Submit review decision
+- `POST /review/{batch_key}` - Approve or close a review checkpoint
 - `GET /assets/{batch_key}/manifest` - Get asset manifest
 - `POST /visual/pipeline` - Manually trigger pipeline
 
@@ -134,7 +134,7 @@ THEME_APPROVED → visual_listener → run_visual_pipeline()
 
 ```
 VISUAL_REVIEW_REQUESTED → Email to owner
-THEME_ASSETS_READY → Publish to product-events channel
+THEME_ASSETS_READY → Publish to asset-events stream after approval
 ```
 
 ## Database Schema

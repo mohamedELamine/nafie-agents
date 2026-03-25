@@ -15,7 +15,6 @@ Pipeline order:
   10. batch_recorder      — save batch log + manifest
   11. manifest_builder    — build final JSON + publish THEME_ASSETS_READY
 """
-import logging
 import os
 from typing import Any, Dict
 
@@ -36,6 +35,10 @@ from .nodes import (
 )
 
 logger = get_logger("visual_production.agent")
+
+
+def _auto_approve_review() -> bool:
+    return os.environ.get("VISUAL_AUTO_APPROVE_REVIEW", "").lower() in {"1", "true", "yes", "on"}
 
 
 # ---------------------------------------------------------------------------
@@ -194,6 +197,19 @@ async def run_visual_pipeline(
         f"— awaiting human approval"
     )
 
+    if _auto_approve_review():
+        logger.info("VISUAL_AUTO_APPROVE_REVIEW enabled; completing batch %s automatically", batch_id)
+        approved_result = await complete_approved_pipeline(
+            agent=agent,
+            batch_id=batch_id,
+            theme_slug=theme_contract.get("slug", ""),
+            version=version,
+            processed_result=processed_result,
+            owner_email=owner_email,
+        )
+        await agent.redis.checkpoint_delete(f"visual_review:{batch_id}")
+        return approved_result
+
     return {
         "status": review_result["status"],   # "review_pending"
         "batch_id": batch_id,
@@ -207,6 +223,7 @@ async def complete_approved_pipeline(
     theme_slug: str,
     version: str,
     processed_result: Dict[str, Any],
+    owner_email: str = "",
 ) -> Dict[str, Any]:
     """
     Continue the pipeline after human approval.
@@ -233,8 +250,17 @@ async def complete_approved_pipeline(
     final_result = await agent.manifest_builder(
         batch_id=batch_id,
         theme_slug=theme_slug,
-        approved_assets=processed_result,
+        approved_assets={"assets": publish_result["assets"]},
     )
+
+    if owner_email:
+        await agent.resend.send_batch_complete(
+            to_email=owner_email,
+            batch_id=batch_id,
+            theme_slug=theme_slug,
+            approved_count=len(publish_result["assets"]),
+            rejected_count=0,
+        )
 
     logger.info(f"Visual pipeline completed — batch {batch_id}")
     return final_result

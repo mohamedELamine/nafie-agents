@@ -1,8 +1,9 @@
-import os
-import httpx
+import asyncio
 import logging
-from typing import Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor
+from typing import Tuple
+
+import httpx
 
 logger = logging.getLogger("visual_production.flux_client")
 
@@ -18,6 +19,9 @@ class FluxClient:
         self, prompt: str, negative_prompt: str, width: int = 1920, height: int = 1080
     ) -> bytes:
         """Generate image using Flux API"""
+        if not self.api_key:
+            logger.warning("FLUX_API_KEY missing; returning placeholder image bytes")
+            return self._placeholder_bytes(prompt, width, height)
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
 
         payload = {
@@ -46,6 +50,10 @@ class FluxClient:
         except Exception as e:
             logger.error(f"Flux API error: {e}")
             raise
+
+    def _placeholder_bytes(self, prompt: str, width: int, height: int) -> bytes:
+        payload = f"flux-placeholder|{width}x{height}|{prompt[:120]}"
+        return payload.encode("utf-8")
 
     async def estimate_cost(self, asset_count: int) -> float:
         """Estimate cost for generating specified number of assets"""

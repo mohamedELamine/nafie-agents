@@ -11,7 +11,6 @@ import hmac
 import logging
 import os
 from datetime import datetime, timezone
-from typing import Any, Dict
 from services.redis_bus import RedisBus, STREAM_SALES_EVENTS
 
 logger = logging.getLogger("platform_agent.commerce.webhook_handler")

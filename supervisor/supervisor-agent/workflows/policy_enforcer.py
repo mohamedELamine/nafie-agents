@@ -1,11 +1,8 @@
 import logging
 from typing import Dict, Any, List
-from datetime import datetime
-from models import AgentHealthStatus
-from db.health_store import health_store
 from db.audit_store import audit_store
 from db.policy_store import policy_store
-from policy_engine import apply_budget_action, block_launch_if_quality_fails
+from policy_engine import apply_budget_action
 
 logger = logging.getLogger("supervisor.policy_enforcer")
 
@@ -115,7 +112,7 @@ class PolicyEnforcer:
         """Log policy enforcement action"""
         try:
             from models import PolicyRule
-            from datetime import datetime
+            from datetime import datetime, timezone
 
             policy = PolicyRule(
                 policy_id=policy_id,
@@ -124,7 +121,7 @@ class PolicyEnforcer:
                 action=action,
                 value=None,
                 active=True,
-                created_at=datetime.utcnow().isoformat(),
+                created_at=datetime.now(timezone.utc).isoformat(),
             )
 
             policy_store.save_policy(policy)

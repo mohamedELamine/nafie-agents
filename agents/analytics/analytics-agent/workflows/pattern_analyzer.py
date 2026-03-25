@@ -1,13 +1,12 @@
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timedelta, timezone
+from typing import Dict, List, Optional
 
 from ..db import pattern_store
-from ..db import signal_store
 from ..db import event_store
 from ..db import attribution_store
+from ..db.connection import get_conn
 from ..logging_config import get_logger
-from ..metric_definitions import IMMEDIATE_THRESHOLDS
-from ..models import Pattern, SignalType, SignalPriority
+from ..models import Pattern
 
 logger = get_logger("workflows.pattern_analyzer")
 
@@ -22,18 +21,21 @@ class OperationalPatternAnalyzer:
         """Analyze for sales drop patterns."""
         try:
             # Get sales for current week and previous week
-            now = datetime.utcnow()
-            current_week = event_store.get_events(
-                event_type="NEW_SALE",
-                since=now - timedelta(days=7),
-                limit=1000,
-            )
-            previous_week = event_store.get_events(
-                event_type="NEW_SALE",
-                since=now - timedelta(days=14),
-                since_before=now - timedelta(days=7),
-                limit=1000,
-            )
+            now = datetime.now(timezone.utc)
+            with get_conn() as conn:
+                current_week = event_store.get_events(
+                    conn=conn,
+                    event_type="NEW_SALE",
+                    since=now - timedelta(days=7),
+                    limit=1000,
+                )
+                previous_week = event_store.get_events(
+                    conn=conn,
+                    event_type="NEW_SALE",
+                    since=now - timedelta(days=14),
+                    before=now - timedelta(days=7),
+                    limit=1000,
+                )
 
             current_sales = len(current_week)
             previous_sales = len(previous_week)
@@ -68,12 +70,15 @@ class OperationalPatternAnalyzer:
         """Analyze for support surge patterns."""
         try:
             # Get support tickets in last 24 hours
-            cutoff = datetime.utcnow() - timedelta(hours=24)
-            tickets = event_store.get_events(
-                event_type="SUPPORT_TICKET_RESOLVED",
-                since=cutoff,
-                limit=1000,
-            )
+            now = datetime.now(timezone.utc)
+            cutoff = now - timedelta(hours=24)
+            with get_conn() as conn:
+                tickets = event_store.get_events(
+                    conn=conn,
+                    event_type="SUPPORT_TICKET_RESOLVED",
+                    since=cutoff,
+                    limit=1000,
+                )
 
             if len(tickets) >= 10:
                 return Pattern(
@@ -85,7 +90,7 @@ class OperationalPatternAnalyzer:
                         "ticket_count": len(tickets),
                         "time_window": "24 hours",
                     },
-                    detected_at=datetime.utcnow(),
+                    detected_at=datetime.now(timezone.utc),
                     is_actionable=True,
                 )
 
@@ -106,19 +111,23 @@ class BusinessPatternAnalyzer:
         """Analyze which channel drives most sales."""
         try:
             # Get attribution data for last 30 days
-            cutoff = datetime.utcnow() - timedelta(days=30)
+            cutoff = datetime.now(timezone.utc) - timedelta(days=30)
 
-            records = attribution_store.get_records_by_theme(
-                conn=__import__("psycopg2").connect(
-                    "postgresql://analytics:password@localhost:5432/analytics_db"
-                ),
-                theme_slug="all",
-                limit=1000,
-            )
+            with get_conn() as conn:
+                records = attribution_store.get_records_by_theme(
+                    conn=conn,
+                    theme_slug="all",
+                    limit=1000,
+                )
+            recent_records = [
+                record
+                for record in records
+                if not record.get("sale_date") or record.get("sale_date") >= cutoff
+            ]
 
             # Count sales by channel
             channel_sales: Dict[str, int] = {}
-            for record in records:
+            for record in recent_records:
                 attributed_to = record.get("attributed_to", "direct")
                 channel_sales[attributed_to] = channel_sales.get(attributed_to, 0) + 1
 
@@ -130,7 +139,7 @@ class BusinessPatternAnalyzer:
 
             if best_channel[1] > 3:  # Minimum 3 sales
                 return Pattern(
-                    pattern_id=f"best_channel_{int(datetime.utcnow().timestamp())}",
+                    pattern_id=f"best_channel_{int(datetime.now(timezone.utc).timestamp())}",
                     pattern_type="BEST_CHANNEL_30D",
                     analytics_type="BUSINESS",
                     confidence=0.75,
@@ -139,7 +148,7 @@ class BusinessPatternAnalyzer:
                         "sales_count": best_channel[1],
                         "total_sales": sum(channel_sales.values()),
                     },
-                    detected_at=datetime.utcnow(),
+                    detected_at=datetime.now(timezone.utc),
                     is_actionable=True,
                 )
 
@@ -153,12 +162,14 @@ class BusinessPatternAnalyzer:
         """Analyze which day/time drives most sales."""
         try:
             # Get sales data for last 30 days
-            cutoff = datetime.utcnow() - timedelta(days=30)
-            events = event_store.get_events(
-                event_type="NEW_SALE",
-                since=cutoff,
-                limit=1000,
-            )
+            cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+            with get_conn() as conn:
+                events = event_store.get_events(
+                    conn=conn,
+                    event_type="NEW_SALE",
+                    since=cutoff,
+                    limit=1000,
+                )
 
             # Count sales by day of week
             day_counts: Dict[str, int] = {}
@@ -170,7 +181,7 @@ class BusinessPatternAnalyzer:
                 best_day = max(day_counts.items(), key=lambda x: x[1])
 
                 return Pattern(
-                    pattern_id=f"best_time_{int(datetime.utcnow().timestamp())}",
+                    pattern_id=f"best_time_{int(datetime.now(timezone.utc).timestamp())}",
                     pattern_type="BEST_TIME_30D",
                     analytics_type="BUSINESS",
                     confidence=0.7,
@@ -179,7 +190,7 @@ class BusinessPatternAnalyzer:
                         "sales_count": best_day[1],
                         "total_sales": len(events),
                     },
-                    detected_at=datetime.utcnow(),
+                    detected_at=datetime.now(timezone.utc),
                     is_actionable=True,
                 )
 
@@ -214,14 +225,9 @@ def run_pattern_analysis() -> List[Pattern]:
         ]
 
         # Save patterns to database
-        conn = __import__("psycopg2").connect(
-            "postgresql://analytics:password@localhost:5432/analytics_db"
-        )
-
-        for pattern in all_patterns:
-            pattern_store.save_pattern(conn, pattern.__dict__)
-
-        conn.close()
+        with get_conn() as conn:
+            for pattern in all_patterns:
+                pattern_store.save_pattern(conn, pattern.__dict__)
 
         logger.info(f"Generated {len(all_patterns)} patterns")
         return all_patterns

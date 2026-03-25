@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import psycopg2
@@ -21,10 +21,7 @@ def save_campaign(
                     content_snapshot, assets_snapshot, 
                     start_date, end_date, status, created_at
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (campaign_id) DO UPDATE SET
-                    title = EXCLUDED.title,
-                    status = EXCLUDED.status,
-                    updated_at = EXCLUDED.created_at
+                ON CONFLICT (campaign_id) DO NOTHING
                 """,
                 (
                     campaign["campaign_id"],
@@ -35,7 +32,7 @@ def save_campaign(
                     campaign["start_date"],
                     campaign["end_date"],
                     campaign["status"],
-                    datetime.utcnow(),
+                    datetime.now(timezone.utc),
                 ),
             )
             conn.commit()
@@ -57,9 +54,7 @@ def schedule_post(conn: psycopg2.extensions.connection, post: Dict[str, Any]) ->
                     asset_snapshot_id, status, variant_label,
                     scheduled_at
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (post_id) DO UPDATE SET
-                    scheduled_time = EXCLUDED.scheduled_time,
-                    status = EXCLUDED.status
+                ON CONFLICT (post_id) DO NOTHING
                 """,
                 (
                     post["post_id"],
@@ -71,7 +66,7 @@ def schedule_post(conn: psycopg2.extensions.connection, post: Dict[str, Any]) ->
                     post["asset_snapshot_id"],
                     post["status"],
                     post.get("variant_label"),
-                    datetime.utcnow(),
+                    datetime.now(timezone.utc),
                 ),
             )
             conn.commit()
@@ -87,7 +82,7 @@ def get_pending_posts(
     """Get pending posts that should be published now or later."""
     try:
         with conn.cursor() as cursor:
-            cutoff = datetime.utcnow()
+            cutoff = datetime.now(timezone.utc)
 
             cursor.execute(
                 """
@@ -118,7 +113,7 @@ def mark_published(conn: psycopg2.extensions.connection, post_id: str) -> None:
                 SET status = 'published', published_at = %s 
                 WHERE post_id = %s
                 """,
-                (datetime.utcnow(), post_id),
+                (datetime.now(timezone.utc), post_id),
             )
             conn.commit()
             logger.debug(f"Marked post as published: {post_id}")

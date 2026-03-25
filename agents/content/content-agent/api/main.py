@@ -5,7 +5,6 @@ Endpoints: GET /health، POST /review/{key}
 """
 from __future__ import annotations
 
-import logging
 import os
 import uuid
 from contextlib import asynccontextmanager

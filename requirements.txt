@@ -22,14 +22,18 @@ google-generativeai>=0.8.0
 asyncpg>=0.29.0
 sqlalchemy[asyncio]>=2.0.0
 alembic>=1.13.0
+psycopg2-binary>=2.9.0
 
 # ── Redis ──────────────────────────────────────────────
 redis[hiredis]>=5.0.0
+requests>=2.32.0
 
 # ── RAG / Embeddings ───────────────────────────────────
 chromadb>=0.5.0
 sentence-transformers>=3.0.0
 langchain-chroma>=0.1.0
+qdrant-client>=1.9.0
+openai>=1.0.0
 
 # ── WooCommerce ────────────────────────────────────────
 woocommerce>=3.0.0

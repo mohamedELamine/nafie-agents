@@ -4,10 +4,8 @@ All writes use ON CONFLICT DO NOTHING (Constitutional Law III).
 """
 import json
 import logging
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from .connection import get_conn
 
 logger = logging.getLogger("visual_production.db.asset_manifest")
 
@@ -26,9 +24,11 @@ def save_manifest(conn, manifest: Dict[str, Any]) -> str:
                 notes, assets_json, created_at, updated_at
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
             ON CONFLICT (batch_id) DO UPDATE SET
-                status     = EXCLUDED.status,
+                theme_slug = EXCLUDED.theme_slug,
+                version = EXCLUDED.version,
                 total_cost = EXCLUDED.total_cost,
-                notes      = EXCLUDED.notes,
+                status = EXCLUDED.status,
+                notes = EXCLUDED.notes,
                 assets_json = EXCLUDED.assets_json,
                 updated_at = NOW()
             """,
@@ -46,13 +46,25 @@ def save_manifest(conn, manifest: Dict[str, Any]) -> str:
     return manifest["batch_id"]
 
 
-def update_manifest_status(conn, batch_id: str, status: str) -> None:
+def update_manifest_status(
+    conn, batch_id: str, status: str, notes: Optional[str] = None
+) -> None:
     """Update manifest status."""
     with conn.cursor() as cur:
-        cur.execute(
-            "UPDATE asset_manifest SET status = %s, updated_at = NOW() WHERE batch_id = %s",
-            (status, batch_id),
-        )
+        if notes is None:
+            cur.execute(
+                "UPDATE asset_manifest SET status = %s, updated_at = NOW() WHERE batch_id = %s",
+                (status, batch_id),
+            )
+        else:
+            cur.execute(
+                """
+                UPDATE asset_manifest
+                SET status = %s, notes = %s, updated_at = NOW()
+                WHERE batch_id = %s
+                """,
+                (status, notes, batch_id),
+            )
 
 
 # ---------------------------------------------------------------------------

@@ -82,10 +82,11 @@ def make_saga_publisher_node(
                     context={"node": NODE_NAME, "idempotency_key": ikey},
                 )
                 try:
-                    resend.send_inconsistency_alert(theme_slug, 
+                    resend.send_inconsistency_alert(theme_slug,
                         {"wp_post_id": wp_post_id, "status": "published"},
                         {"ls_product_id": ls_product_id, "status": "draft"})
-                except Exception: pass
+                except Exception as e:
+                    logger.error("saga_publisher | failed to send inconsistency alert theme=%s: %s", theme_slug, e)
                 mark_failed(registry.db, ikey, NODE_NAME)
                 return {**state,
                         "wp_post_id": wp_post_id,

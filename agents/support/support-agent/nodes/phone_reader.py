@@ -1,6 +1,4 @@
-from typing import TypedDict
-from datetime import datetime
-from models import SupportTicket, SupportAnswer
+from datetime import datetime, timezone
 
 
 class PhoneReaderNode:
@@ -18,7 +16,7 @@ class PhoneReaderNode:
             "platform": "phone",
             "body": message.get("transcript", ""),
             "subject": message.get("subject", "Phone Call"),
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
             "updated": False,
         }
 

@@ -1,10 +1,7 @@
 import logging
 from typing import Optional
-from datetime import datetime
-import uuid
-from models import WorkflowInstance, WorkflowStatus, WorkflowStep, EventEnvelope, WorkflowType
-from policy_engine import evaluate_policies, check_user_locked
-from agent_registry import get_agent, get_degraded_action
+from datetime import datetime, timezone
+from models import WorkflowInstance, WorkflowStatus
 from db.audit_store import audit_store
 from db.workflow_store import workflow_store
 
@@ -45,14 +42,14 @@ def transition_workflow(
         # Update instance
         old_status = instance.status
         instance.status = new_status
-        instance.updated_at = datetime.utcnow()
+        instance.updated_at = datetime.now(timezone.utc)
 
         if new_status == WorkflowStatus.RUNNING and not instance.started_at:
-            instance.started_at = datetime.utcnow()
+            instance.started_at = datetime.now(timezone.utc)
             instance.started_at = instance.started_at.isoformat()
 
         if new_status in TERMINAL_STATES and not instance.completed_at:
-            instance.completed_at = datetime.utcnow().isoformat()
+            instance.completed_at = datetime.now(timezone.utc).isoformat()
 
         # Save to database
         workflow_store.save(instance)
@@ -61,7 +58,7 @@ def transition_workflow(
 
         return instance
 
-    except ValueError as e:
+    except ValueError:
         raise
     except Exception as e:
         logger.error(f"Error transitioning workflow: {e}")

@@ -10,7 +10,7 @@ from state import ContentState
 from models import ContextBundle, ContentType
 
 if TYPE_CHECKING:
-    from db.content_registry import ContentRegistry
+    pass
 
 logger = logging.getLogger("content_agent.nodes.context_enricher")
 

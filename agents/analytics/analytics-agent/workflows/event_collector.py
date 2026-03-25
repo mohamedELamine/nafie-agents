@@ -3,9 +3,16 @@ Event Collector — طبقة ١
 سريع جداً: تخزين + idempotency + attribution فوري عند NEW_SALE.
 """
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict
 
+from core.contracts import (
+    STREAM_BUILDER_EVENTS,
+    STREAM_CONTENT_EVENTS,
+    STREAM_MARKETING_EVENTS,
+    STREAM_PRODUCT_EVENTS,
+    STREAM_SUPPORT_EVENTS,
+)
 from ..db import event_store
 from ..db.connection import get_conn
 from ..logging_config import get_logger
@@ -16,11 +23,11 @@ logger = get_logger("workflows.event_collector")
 
 # قنوات Redis المُستمَع عليها
 INBOUND_STREAMS = [
-    "product-events",
-    "support-events",
-    "marketing-events",
-    "content-events",
-    "builder-events",
+    STREAM_PRODUCT_EVENTS,
+    STREAM_SUPPORT_EVENTS,
+    STREAM_MARKETING_EVENTS,
+    STREAM_CONTENT_EVENTS,
+    STREAM_BUILDER_EVENTS,
 ]
 
 CONSUMER_GROUP = "analytics-agent"
@@ -55,11 +62,11 @@ def event_collector_node(event: Dict[str, Any]) -> None:
                     f"ANL_002: occurred_at مفقود أو خاطئ في {event_id} — "
                     "استخدام received_at كـ fallback للتخزين فقط"
                 )
-                occurred_at = datetime.utcnow()
+                occurred_at = datetime.now(timezone.utc)
         elif not isinstance(occurred_at, datetime):
-            occurred_at = datetime.utcnow()
+            occurred_at = datetime.now(timezone.utc)
 
-        received_at = datetime.utcnow()
+        received_at = datetime.now(timezone.utc)
 
         analytics_event = AnalyticsEvent(
             event_id     = event_id,
@@ -102,13 +109,16 @@ def _handle_new_sale(event: AnalyticsEvent) -> None:
         return
 
     # attribute_sale يفتح connection خاصاً بها ويُغلقه
-    attribute_sale(
-        sale_id      = str(sale_id),
-        sale_date    = event.occurred_at,   # occurred_at — ليس received_at
-        theme_slug   = theme_slug,
-        amount_usd   = amount_usd,
-        license_tier = license_tier,
-    )
+    try:
+        attribute_sale(
+            sale_id      = str(sale_id),
+            sale_date    = event.occurred_at,   # occurred_at — ليس received_at
+            theme_slug   = theme_slug,
+            amount_usd   = amount_usd,
+            license_tier = license_tier,
+        )
+    except Exception as e:
+        logger.error(f"Attribution failed for sale {sale_id}: {e}")
 
 
 def start_event_collector() -> None:

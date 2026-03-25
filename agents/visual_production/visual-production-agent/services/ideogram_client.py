@@ -1,7 +1,6 @@
-import os
 import httpx
 import logging
-from typing import Optional, Tuple
+from typing import Tuple
 
 logger = logging.getLogger("visual_production.ideogram_client")
 
@@ -16,6 +15,9 @@ class IdeogramClient:
         self, prompt: str, arabic_text: str, dimensions: Tuple[int, int] = (1920, 1080)
     ) -> bytes:
         """Generate image with Arabic text using Ideogram"""
+        if not self.api_key:
+            logger.warning("IDEOGRAM_API_KEY missing; returning placeholder image bytes")
+            return self._placeholder_bytes(prompt, arabic_text, dimensions)
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
 
         payload = {
@@ -43,6 +45,13 @@ class IdeogramClient:
         except Exception as e:
             logger.error(f"Ideogram API error: {e}")
             raise
+
+    def _placeholder_bytes(
+        self, prompt: str, arabic_text: str, dimensions: Tuple[int, int]
+    ) -> bytes:
+        width, height = dimensions
+        payload = f"ideogram-placeholder|{width}x{height}|{arabic_text[:80]}|{prompt[:80]}"
+        return payload.encode("utf-8")
 
     async def estimate_cost(self, asset_count: int) -> float:
         """Estimate cost for generating specified number of assets with text"""

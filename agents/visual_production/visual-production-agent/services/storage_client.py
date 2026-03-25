@@ -8,7 +8,8 @@ logger = logging.getLogger("visual_production.storage_client")
 class StorageClient:
     def __init__(self, storage_type: str = "local", storage_path: Optional[str] = None):
         self.storage_type = storage_type
-        self.storage_path = storage_path or os.getenv("STORAGE_PATH", "/app/storage")
+        default_path = os.path.join(os.getcwd(), "storage")
+        self.storage_path = storage_path or os.getenv("STORAGE_PATH", default_path)
         os.makedirs(self.storage_path, exist_ok=True)
 
     async def save_asset(

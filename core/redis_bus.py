@@ -9,7 +9,7 @@ import json
 import uuid
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Callable, Dict, List, Optional, Any
 
 import redis.asyncio as aioredis
@@ -70,7 +70,7 @@ class RedisBus:
             "source":     self._agent_name,
             "target":     target,
             "payload":    payload,
-            "timestamp":  datetime.utcnow().isoformat(),
+            "timestamp":  datetime.now(timezone.utc).isoformat(),
             "trace_id":   trace_id or str(uuid.uuid4()),
             "priority":   priority,
         }
@@ -153,7 +153,7 @@ class RedisBus:
         data = json.dumps({
             "agent":     self._agent_name,
             "status":    status,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }, ensure_ascii=False)
         await self._pub.setex(key, 60, data)  # TTL 60 ثانية
 

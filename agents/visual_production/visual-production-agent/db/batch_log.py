@@ -3,10 +3,9 @@ Batch log DB operations — psycopg2 + get_conn().
 All writes use ON CONFLICT DO NOTHING (Constitutional Law III).
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-from .connection import get_conn
 
 logger = logging.getLogger("visual_production.db.batch_log")
 
@@ -25,18 +24,12 @@ def save_batch(conn, batch_data: Dict[str, Any]) -> str:
                 assets_count, status, generated_assets,
                 quality_approved, quality_rejected
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (batch_id) DO UPDATE SET
-                status           = EXCLUDED.status,
-                budget_used      = EXCLUDED.budget_used,
-                assets_count     = EXCLUDED.assets_count,
-                generated_assets = EXCLUDED.generated_assets,
-                quality_approved = EXCLUDED.quality_approved,
-                quality_rejected = EXCLUDED.quality_rejected
+            ON CONFLICT (batch_id) DO NOTHING
             """,
             (
                 batch_data["batch_id"],
                 batch_data["theme_slug"],
-                batch_data.get("started_at", datetime.utcnow()),
+                batch_data.get("started_at", datetime.now(timezone.utc)),
                 batch_data.get("budget_used", 0.0),
                 batch_data.get("assets_count", 0),
                 batch_data.get("status", "pending"),

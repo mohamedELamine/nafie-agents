@@ -5,9 +5,16 @@ Content Agent — Graph Builder
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
-from typing import Optional
+import sys
+from typing import TYPE_CHECKING, Optional
+
+# Add parent directories to path for core imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+from core.base_agent import BaseAgent
+from core.state import AgentName, BusinessEvent, EventType
 
 from langgraph.graph import END, StateGraph
 
@@ -34,19 +41,21 @@ from nodes import (
     route_after_review,
     route_after_validation,
 )
-from services.claude_client import ClaudeContentClient
-from services.redis_bus import RedisBus
-from services.resend_client import ContentResendClient
 from state import ContentState, make_initial_state
+
+if TYPE_CHECKING:
+    from services.claude_client import ClaudeContentClient
+    from services.redis_bus import RedisBus
+    from services.resend_client import ContentResendClient
 
 logger = logging.getLogger("content_agent.agent")
 
 
 def build_content_graph(
-    registry:     Optional[ContentRegistry]      = None,
-    claude:       Optional[ClaudeContentClient]  = None,
-    redis_bus:    Optional[RedisBus]             = None,
-    resend:       Optional[ContentResendClient]  = None,
+    registry: Optional[ContentRegistry] = None,
+    claude: Optional["ClaudeContentClient"] = None,
+    redis_bus: Optional["RedisBus"] = None,
+    resend: Optional["ContentResendClient"] = None,
 ):
     """
     يبني الـ graph الكامل مع dependency injection.
@@ -57,6 +66,10 @@ def build_content_graph(
     → content_generator → content_validator → review_gate
     → content_dispatcher → registry_updater → content_recorder → END
     """
+    from services.claude_client import ClaudeContentClient
+    from services.redis_bus import RedisBus
+    from services.resend_client import ContentResendClient
+
     # ── Services Init ─────────────────────────────────────────────
     _registry  = registry  or ContentRegistry()
     _claude    = claude    or ClaudeContentClient()
@@ -143,3 +156,32 @@ def run_content_pipeline(request: ContentRequest, **services) -> dict:
         request.request_id, result.get("status"),
     )
     return result
+
+
+# ── BaseAgent subclass ─────────────────────────────────────────────
+
+class ContentAgent(BaseAgent):
+    """Content agent — inherits BaseAgent for Redis, heartbeats, and supervision."""
+
+    agent_name = AgentName.CONTENT
+
+    async def setup_handlers(self) -> None:
+        self.bus.on(EventType.CONTENT_REQUESTED, self.run)
+
+    async def run(self, event: BusinessEvent) -> None:
+        try:
+            request = ContentRequest(**event["payload"])
+            result = run_content_pipeline(request)
+            if result.get("status") == "completed":
+                await self.emit(
+                    EventType.CONTENT_READY,
+                    result,
+                    trace_id=event.get("trace_id"),
+                )
+        except Exception as e:
+            await self.emit_error(str(e), trace_id=event.get("trace_id"))
+
+
+if __name__ == "__main__":
+    agent = ContentAgent()
+    asyncio.run(agent.start())

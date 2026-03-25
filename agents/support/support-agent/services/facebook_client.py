@@ -1,4 +1,4 @@
-import logging
+import os
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -104,6 +104,6 @@ class FacebookClient:
             return []
 
 
-def get_facebook_client(page_token: str) -> FacebookClient:
+def get_facebook_client(page_token: Optional[str] = None) -> FacebookClient:
     """Get Facebook client instance."""
-    return FacebookClient(page_token)
+    return FacebookClient(page_token or os.environ.get("META_ACCESS_TOKEN", ""))

@@ -6,8 +6,7 @@ Node: REQUEST_RECEIVER
 from __future__ import annotations
 import logging
 from state import ContentState
-from models import CONTENT_CATEGORY_MAP, ContentRequest, ContentTrigger, ContentType
-from db.idempotency import check_completed
+from models import ContentType
 
 logger = logging.getLogger("content_agent.nodes.request_receiver")
 NODE_NAME = "REQUEST_RECEIVER"

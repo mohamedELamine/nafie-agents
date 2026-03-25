@@ -1,8 +1,10 @@
 """
 Visual-production-agent FastAPI application.
 """
-import logging
+import base64
 import os
+import sys
+import types
 import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Dict
@@ -11,10 +13,52 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from ..db import get_conn, get_manifest, init_pool, close_pool
-from ..logging_config import get_logger
+# Ensure the agent root is on sys.path for `uvicorn api.main:app`.
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+_AGENT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+_pkg = types.ModuleType("visual_production_agent")
+_pkg.__path__ = [_AGENT_DIR]
+_pkg.__package__ = "visual_production_agent"
+sys.modules.setdefault("visual_production_agent", _pkg)
+
+from db import (
+    close_pool,
+    get_conn,
+    get_manifest,
+    init_pool,
+    update_manifest_status,
+)
+from logging_config import get_logger
 
 logger = get_logger("api.main")
+
+VALID_REVIEW_DECISIONS = {"approved", "rejected", "needs_revision"}
+
+
+async def _get_review_checkpoint(redis_bus, batch_key: str) -> Dict[str, Any]:
+    checkpoint = await redis_bus.checkpoint_get(f"visual_review:{batch_key}")
+    if not checkpoint:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Review checkpoint for batch {batch_key!r} not found",
+        )
+    return checkpoint
+
+
+def _decode_checkpoint_assets(assets: Dict[str, Any]) -> Dict[str, Any]:
+    decoded_assets: Dict[str, Any] = {}
+    for asset_type, asset in assets.items():
+        decoded_assets[asset_type] = {
+            key: base64.b64decode(value) if key == "image_bytes" and isinstance(value, str) else value
+            for key, value in asset.items()
+        }
+    return decoded_assets
+
+
+async def _finalize_non_approved_review(redis_bus, batch_key: str, status: str, notes: str) -> None:
+    with get_conn() as conn:
+        update_manifest_status(conn, batch_key, status=status, notes=notes or None)
+    await redis_bus.checkpoint_delete(f"visual_review:{batch_key}")
 
 
 @asynccontextmanager
@@ -52,12 +96,12 @@ app.add_middleware(
 
 @app.get("/")
 async def root() -> Dict[str, Any]:
-    from datetime import datetime
+    from datetime import datetime, timezone
     return {
         "service": "visual-production-agent",
         "version": "1.0.0",
         "status": "running",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -80,8 +124,9 @@ async def handle_review_decision(
     decision.notes:    optional string
     """
     decision_type = decision.get("decision", "").lower()
+    notes = decision.get("notes", "")
 
-    if decision_type not in ("approved", "rejected", "needs_revision"):
+    if decision_type not in VALID_REVIEW_DECISIONS:
         raise HTTPException(
             status_code=400,
             detail=f"Invalid decision type: {decision_type!r}",
@@ -89,11 +134,42 @@ async def handle_review_decision(
 
     logger.info(f"Review decision for {batch_key}: {decision_type}")
 
-    # TODO: trigger downstream pipeline step based on decision_type
+    from visual_production_agent.agent import build_visual_agent, complete_approved_pipeline
+
+    agent = build_visual_agent()
+    checkpoint = await _get_review_checkpoint(agent.redis, batch_key)
+
+    if decision_type == "approved":
+        result = await complete_approved_pipeline(
+            agent=agent,
+            batch_id=batch_key,
+            theme_slug=checkpoint.get("theme_slug", ""),
+            version=checkpoint.get("version", "1.0"),
+            processed_result={
+                "processed": _decode_checkpoint_assets(checkpoint.get("assets", {})),
+                "total_size_kb": checkpoint.get("total_size_kb", 0),
+            },
+            owner_email=checkpoint.get("owner_email", ""),
+        )
+        await agent.redis.checkpoint_delete(f"visual_review:{batch_key}")
+        return {
+            "status": decision_type,
+            "batch_key": batch_key,
+            "message": "Batch approved and published",
+            "result": result,
+        }
+
+    await _finalize_non_approved_review(
+        agent.redis,
+        batch_key,
+        status=decision_type,
+        notes=notes,
+    )
     return {
         "status": decision_type,
         "batch_key": batch_key,
         "message": f"Batch {decision_type}",
+        "notes": notes,
     }
 
 
@@ -141,7 +217,7 @@ async def run_visual_pipeline_endpoint(request: Request) -> Dict[str, Any]:
 
         logger.info(f"Manual pipeline triggered — batch {batch_id}")
 
-        from ..agent import build_visual_agent, run_visual_pipeline
+        from visual_production_agent.agent import build_visual_agent, run_visual_pipeline
 
         agent = build_visual_agent()
         result = await run_visual_pipeline(

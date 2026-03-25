@@ -5,6 +5,11 @@ Node: CONTENT_DISPATCHER
 """
 from __future__ import annotations
 import logging
+from core.contracts import (
+    EVENT_CONTENT_PRODUCED,
+    EVENT_CONTENT_READY,
+    STREAM_CONTENT_EVENTS,
+)
 from state import ContentState
 from services.redis_bus import STREAM_ANALYTICS_EVENTS
 
@@ -50,7 +55,7 @@ def make_content_dispatcher_node(redis_bus):
             ]
 
         event = redis_bus.build_event(
-            event_type     = "CONTENT_READY",
+            event_type     = EVENT_CONTENT_READY,
             data           = {
                 "content_id":       piece.content_id,
                 "content_type":     piece.content_type.value if hasattr(piece.content_type, 'value') else str(piece.content_type),
@@ -61,16 +66,18 @@ def make_content_dispatcher_node(redis_bus):
                 "metadata":         piece.metadata,
                 "validation_score": piece.validation_score,
                 "request_id":       request.request_id,
+                "target_agent":     target,
             },
             correlation_id = request.correlation_id,
         )
 
         channel = AGENT_CHANNEL_MAP.get(target, f"{target}-events")
         redis_bus.publish(channel, event)
+        redis_bus.publish_stream(STREAM_CONTENT_EVENTS, event)
 
         # إشعار وكيل التحليل بكل مخرج
         analytics_event = redis_bus.build_event(
-            event_type     = "CONTENT_PRODUCED",
+            event_type     = EVENT_CONTENT_PRODUCED,
             data           = {
                 "content_id":       piece.content_id,
                 "content_type":     piece.content_type.value if hasattr(piece.content_type, 'value') else str(piece.content_type),

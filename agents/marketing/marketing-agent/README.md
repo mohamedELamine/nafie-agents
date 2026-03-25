@@ -47,7 +47,7 @@ agents/marketing/marketing-agent/
 [asset_collector]       ← يجمّد: ContentSnapshot + AssetSnapshot
        │
        ▼
-[analytics_consumer]    ← يُطبّق AUTO_APPLICABLE_SIGNALS (best_time, best_format)
+[analytics_consumer]    ← يُطبّق AUTO_APPLICABLE_SIGNALS (best_time, best_channel)
        │
        ▼
 [channel_router]        ← AUTONOMOUS vs PAID_ONLY
@@ -66,8 +66,10 @@ agents/marketing/marketing-agent/
 
 ## Event Contracts
 
-**Inbound**: `CONTENT_READY`, `THEME_ASSETS_READY`, `ANALYTICS_SIGNAL`
-**Outbound**: `CAMPAIGN_LAUNCHED`, `POST_PUBLISHED`
+**Inbound Streams**: `content-events`, `asset-events`, `analytics:signals`
+**Inbound Events**: `CONTENT_READY`, `THEME_ASSETS_READY`, `ANALYTICS_SIGNAL`
+**Outbound Stream**: `marketing-events`
+**Outbound Events**: `CAMPAIGN_LAUNCHED`, `POST_PUBLISHED`
 
 ## Setup
 
@@ -99,6 +101,9 @@ psql -U marketing -d marketing_db -f db/migrations/001_marketing_tables.sql
 ```bash
 # Start API server
 uvicorn api.main:app --host 0.0.0.0 --port 8000
+
+# Or from the repository root
+python agents/marketing/agent.py
 ```
 
 ## API Endpoints
@@ -127,6 +132,12 @@ The marketing agent operates under these core principles:
    - Partial launch prohibited
 5. **Idempotency**: No duplicate posts on same platform
 6. **Analytics-Driven**: Only AUTO_APPLICABLE_SIGNALS applied, never USER_LOCKED_DECISIONS
+
+## Runtime Notes
+
+- `best_time` now updates scheduling windows.
+- `best_channel` now updates selected channels instead of mutating formats.
+- Listeners read from shared Redis streams and use `MARKETING_DATABASE_URL` or `DATABASE_URL` when available.
 
 ## Database Schema
 

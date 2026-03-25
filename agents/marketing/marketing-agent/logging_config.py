@@ -1,12 +1,12 @@
 import logging
 import sys
-from datetime import datetime
-from typing import Any, Dict
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING, Any, Dict
 
-import redis
 from redis.exceptions import RedisError
 
-from .db.redis_bus import RedisBus
+if TYPE_CHECKING:
+    from .services.redis_bus import RedisBus
 
 
 def configure_logging(log_level: str = "INFO") -> None:
@@ -36,7 +36,7 @@ def get_logger(name: str) -> logging.Logger:
 class RedisLogHandler(logging.Handler):
     """Send log messages to Redis for centralized logging."""
 
-    def __init__(self, redis_bus: RedisBus):
+    def __init__(self, redis_bus: "RedisBus"):
         super().__init__()
         self.redis_bus = redis_bus
         self.channel = "marketing:logs"
@@ -44,7 +44,7 @@ class RedisLogHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         try:
             log_data: Dict[str, Any] = {
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "level": record.levelname,
                 "logger": record.name,
                 "message": record.getMessage(),
@@ -57,6 +57,6 @@ class RedisLogHandler(logging.Handler):
                 log_data["exception"] = self.format(record)
 
             self.redis_bus.publish(self.channel, log_data)
-        except (RedisError, Exception) as e:
+        except (RedisError, Exception):
             # Don't let Redis issues break the logging
             pass

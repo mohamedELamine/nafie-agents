@@ -1,6 +1,6 @@
 import resend
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from ..logging_config import get_logger
 
@@ -27,7 +27,7 @@ class ResendClient:
         """Send campaign launched notification."""
         try:
             email = owner_email or self.owner_email
-            
+
             subject = f"🚀 Campaign Launched: {campaign_title}"
             body = f"""
             <h1>Campaign Launched Successfully</h1>
@@ -37,15 +37,15 @@ class ResendClient:
             <p><strong>Channels:</strong> {', '.join(channels)}</p>
             <p>Your campaign has been scheduled and will be published automatically.</p>
             """
-            
+
             for attempt in range(retry):
                 try:
-                    response = resend.Emails.send(
-                        from="onboarding@resend.dev",
-                        to=[email],
-                        subject=subject,
-                        html=body,
-                    )
+                    response = resend.Emails.send({
+                        "from": "onboarding@resend.dev",
+                        "to": [email],
+                        "subject": subject,
+                        "html": body,
+                    })
 
                     if response.id:
                         logger.info(f"Sent campaign launched email: {response.id}")
@@ -75,7 +75,7 @@ class ResendClient:
         """Send publish failed notification."""
         try:
             email = owner_email or self.owner_email
-            
+
             subject = f"⚠️ Publish Failed: {channel} - {post_id}"
             body = f"""
             <h1>Publish Failed</h1>
@@ -85,15 +85,15 @@ class ResendClient:
             <p><strong>Error:</strong> {error}</p>
             <p>The post failed to publish. The agent will retry automatically.</p>
             """
-            
+
             for attempt in range(retry):
                 try:
-                    response = resend.Emails.send(
-                        from="onboarding@resend.dev",
-                        to=[email],
-                        subject=subject,
-                        html=body,
-                    )
+                    response = resend.Emails.send({
+                        "from": "onboarding@resend.dev",
+                        "to": [email],
+                        "subject": subject,
+                        "html": body,
+                    })
 
                     if response.id:
                         logger.info(f"Sent publish failed email: {response.id}")
@@ -122,7 +122,7 @@ class ResendClient:
         """Send paid channel suggestion."""
         try:
             email = owner_email or self.owner_email
-            
+
             subject = f"💰 Suggested: {channel} Paid Ad"
             body = f"""
             <h1>Paid Channel Suggestion</h1>
@@ -131,15 +131,15 @@ class ResendClient:
             <p><strong>Suggested Time:</strong> {suggested_time.isoformat()}</p>
             <p><strong>Note:</strong> This is a suggestion only. Please review and approve before enabling.</p>
             """
-            
+
             for attempt in range(retry):
                 try:
-                    response = resend.Emails.send(
-                        from="onboarding@resend.dev",
-                        to=[email],
-                        subject=subject,
-                        html=body,
-                    )
+                    response = resend.Emails.send({
+                        "from": "onboarding@resend.dev",
+                        "to": [email],
+                        "subject": subject,
+                        "html": body,
+                    })
 
                     if response.id:
                         logger.info(f"Sent paid channel suggestion email: {response.id}")

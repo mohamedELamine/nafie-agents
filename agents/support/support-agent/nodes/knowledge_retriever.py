@@ -1,7 +1,6 @@
 from typing import Any, Dict, List
 
 from ..logging_config import get_logger
-from ..models import SupportAnswer
 
 logger = get_logger("nodes.knowledge_retriever")
 

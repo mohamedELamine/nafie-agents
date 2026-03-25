@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 from ..logging_config import get_logger
@@ -23,8 +23,13 @@ def make_ticket_receiver_node() -> callable:
                 platform = Platform.HELPSCOUT
 
             # Generate a fallback ticket_id if missing
-            fallback_id = f"ticket_{int(datetime.utcnow().timestamp())}"
-            ticket_id = ticket_data.get("ticket_id") or ticket_data.get("conversation_id") or fallback_id
+            fallback_id = f"ticket_{int(datetime.now(timezone.utc).timestamp())}"
+            ticket_id = (
+                ticket_data.get("ticket_id")
+                or ticket_data.get("conversation_id")
+                or ticket_data.get("id")
+                or fallback_id
+            )
 
             # Parse occurred_at — fallback to utcnow with warning
             raw_created = ticket_data.get("created_at")
@@ -32,15 +37,18 @@ def make_ticket_receiver_node() -> callable:
                 try:
                     created_at = datetime.fromisoformat(raw_created)
                 except (ValueError, TypeError):
-                    logger.warning(f"Invalid created_at '{raw_created}', using utcnow")
-                    created_at = datetime.utcnow()
+                    logger.warning(
+                        f"Invalid created_at '{raw_created}', using current UTC time"
+                    )
+                    created_at = datetime.now(timezone.utc)
             else:
-                created_at = datetime.utcnow()
+                created_at = datetime.now(timezone.utc)
 
             ticket = {
                 "ticket_id":       ticket_id,
                 "platform":        platform,
                 "conversation_id": ticket_data.get("conversation_id"),
+                "page_id":         ticket_data.get("page_id"),
                 "customer_email":  (
                     ticket_data.get("customer_email")
                     or ticket_data.get("customer", {}).get("email")

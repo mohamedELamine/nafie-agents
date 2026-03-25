@@ -5,7 +5,6 @@ Node: PAGE_RENDERER — T048
 المرجع: spec.md § ١٥ | tasks/phase3 § T048
 """
 from __future__ import annotations
-import json
 import logging
 from db.idempotency import check_completed, mark_completed, mark_started, mark_failed
 from db.registry import ProductRegistry

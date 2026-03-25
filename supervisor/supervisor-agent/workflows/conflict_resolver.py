@@ -1,11 +1,10 @@
 import logging
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
-from models import ConflictType, ConflictRecord, SupervisorAuditLog, AuditCategory
+from models import ConflictType, ConflictRecord, AuditCategory
 from db.conflict_store import conflict_store
 from db.audit_store import audit_store
-from redis_bus import redis_bus
 
 logger = logging.getLogger("supervisor.conflict_resolver")
 
@@ -29,8 +28,8 @@ class ConflictResolver:
                     conflict_type=ConflictType.SIGNAL_CONTRADICTION,
                     agents_involved=agents,
                     description=description,
-                    escalation=False,
-                    created_at=datetime.utcnow().isoformat(),
+                    escalated=False,
+                    created_at=datetime.now(timezone.utc).isoformat(),
                 )
                 return conflict
 
@@ -41,8 +40,8 @@ class ConflictResolver:
                     conflict_type=ConflictType.BUDGET_EXCEEDED,
                     agents_involved=["platform", "marketing"],
                     description="Budget allocation conflict detected",
-                    escalation=True,
-                    created_at=datetime.utcnow().isoformat(),
+                    escalated=True,
+                    created_at=datetime.now(timezone.utc).isoformat(),
                 )
                 return conflict
 
@@ -53,8 +52,8 @@ class ConflictResolver:
                     conflict_type=ConflictType.DEPENDENCY_FAILURE,
                     agents_involved=data.get("agents_involved", []),
                     description=f"Dependency failure: {data.get('reason', 'unknown')}",
-                    escalation=False,
-                    created_at=datetime.utcnow().isoformat(),
+                    escalated=False,
+                    created_at=datetime.now(timezone.utc).isoformat(),
                 )
                 return conflict
 
@@ -99,16 +98,17 @@ class ConflictResolver:
                 resolution = self.resolve_by_rules(conflict)
 
                 # Send critical alert
-                await self.resend.send_critical_system_alert(
-                    alert_type="Conflicts Require Resolution",
-                    details={
-                        "conflict_type": conflict.conflict_type.value,
-                        "agents_involved": conflict.agents_involved,
-                        "description": conflict.description,
-                        "resolution_suggestion": resolution,
-                        "timestamp": datetime.utcnow().isoformat(),
-                    },
-                )
+                if self.resend:
+                    await self.resend.send_critical_system_alert(
+                        alert_type="Conflicts Require Resolution",
+                        details={
+                            "conflict_type": conflict.conflict_type.value,
+                            "agents_involved": conflict.agents_involved,
+                            "description": conflict.description,
+                            "resolution_suggestion": resolution,
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                        },
+                    )
 
                 # Audit log escalation
                 audit_store.write_audit(
@@ -134,7 +134,10 @@ class ConflictResolver:
     def record_resolution(self, conflict_id: str, resolution: str, detail: Optional[dict] = None):
         """Record conflict resolution"""
         try:
-            conflict = conflict_store.get_open_conflicts()[0] if conflict_id else None
+            conflict = next(
+                (item for item in conflict_store.get_open_conflicts() if item.conflict_id == conflict_id),
+                None,
+            )
             if not conflict:
                 logger.error(f"Conflict {conflict_id} not found")
                 return

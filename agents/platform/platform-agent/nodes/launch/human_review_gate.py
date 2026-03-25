@@ -7,7 +7,7 @@ MAX_REVISION_CYCLES = 3 (من .env)
 from __future__ import annotations
 import logging
 import os
-from db.idempotency import check_completed, mark_completed, mark_started
+from db.idempotency import mark_completed, mark_started
 from db.registry import ProductRegistry
 from services.resend_client import ResendClient
 from services.redis_bus import RedisBus

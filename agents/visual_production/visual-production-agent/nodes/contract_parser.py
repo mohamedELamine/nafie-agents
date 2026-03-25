@@ -1,6 +1,5 @@
 from typing import Dict, Any
 import logging
-from ..models import AssetType
 
 logger = logging.getLogger("visual_production.contract_parser")
 

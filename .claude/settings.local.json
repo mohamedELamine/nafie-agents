@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc -l /Users/mohammed/projects/arabic-themes-ecosystem/.claude/docs/*.md)"
+    ]
+  }
+}

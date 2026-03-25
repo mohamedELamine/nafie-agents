@@ -1,10 +1,6 @@
-from typing import TypedDict
-from datetime import datetime
+from datetime import datetime, timezone
 from api import FastAPI
 from fastapi import WebSocket, WebSocketDisconnect, HTTPException
-from nodes import SupportGraph, should_escalate
-from typing import Optional
-import json
 
 
 class WebSocketManager:
@@ -40,7 +36,7 @@ class TicketListener:
             f"{platform}:processing",
             {
                 "ticket_id": ticket_id,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "status": "received",
             },
         )
@@ -50,7 +46,7 @@ class TicketListener:
                 "type": "ticket_received",
                 "ticket_id": ticket_id,
                 "platform": platform,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
         )
 
@@ -60,7 +56,7 @@ class TicketListener:
         status = ticket_data.get("status")
 
         self.redis.publish_message(
-            f"phone:outgoing", {"id": ticket_id, "status": status, "answer": answer}
+            "phone:outgoing", {"id": ticket_id, "status": status, "answer": answer}
         )
 
         await self.websocket.broadcast(
@@ -68,7 +64,7 @@ class TicketListener:
                 "type": "ticket_answered",
                 "ticket_id": ticket_id,
                 "status": status,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
         )
 

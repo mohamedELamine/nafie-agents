@@ -7,10 +7,9 @@ Platform Agent — Graph Assembly (T053 + T064)
 """
 from __future__ import annotations
 import logging
-import os
-import psycopg2
 from langgraph.graph import END, StateGraph
 
+from db.connection import init_pool, get_conn
 from db.registry import ProductRegistry
 from nodes.launch.launch_entry import make_launch_entry_node
 from nodes.launch.inconsistency_check import make_inconsistency_check_node
@@ -44,8 +43,8 @@ logger = logging.getLogger("platform_agent.agent")
 
 
 def _make_services():
-    db_conn = psycopg2.connect(os.environ["DATABASE_URL"])
-    registry = ProductRegistry(db_conn)
+    init_pool()
+    registry = ProductRegistry(get_conn)
     wp_client = WordPressClient()
     ls_client = LemonSqueezyClient()
     redis_bus = RedisBus()
@@ -177,6 +176,8 @@ if __name__ == "__main__":
     from listeners.update_listener import UpdateListener
     t1 = threading.Thread(target=LaunchListener().run, daemon=True)
     t2 = threading.Thread(target=UpdateListener().run, daemon=True)
-    t1.start(); t2.start()
+    t1.start()
+    t2.start()
     logger.info("Platform Agent running — waiting for events...")
-    t1.join(); t2.join()
+    t1.join()
+    t2.join()

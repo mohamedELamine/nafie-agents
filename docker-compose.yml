@@ -1,5 +1,3 @@
-version: "3.9"
-
 # ══════════════════════════════════════════════════════════════
 # منظومة قوالب WordPress العربية — Docker Compose
 # تشغيل: docker-compose up -d
@@ -8,6 +6,24 @@ version: "3.9"
 services:
 
   # ── البنية التحتية ──────────────────────────────────────────
+
+  qdrant:
+    image: qdrant/qdrant:v1.9.3
+    container_name: ar_themes_qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      QDRANT__SERVICE__HTTP_PORT: 6333
+      QDRANT__SERVICE__GRPC_PORT: 6334
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:6333/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
@@ -22,7 +38,7 @@ services:
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
-      timeout: 5s
+      timeout: 3s
       retries: 5
 
   postgres:
@@ -31,18 +47,30 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_DB:       ${POSTGRES_DB:-ar_themes}
-      POSTGRES_USER:     ${POSTGRES_USER:-ar_themes_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER:     ${POSTGRES_USER:-app_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ar_themes_user}"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
       timeout: 5s
       retries: 5
+
+  migrate:
+    image: postgres:15
+    container_name: ar_themes_migrate
+    command: bash -c "psql $$DATABASE_URL -f /migrations/init_db.sql"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-app_user}:${POSTGRES_PASSWORD:-change_me}@postgres:5432/${POSTGRES_DB:-ar_themes}
+    volumes:
+      - ./scripts:/migrations
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
 
   # ── وكيل المدير العام ───────────────────────────────────────
 
@@ -55,25 +83,78 @@ services:
     environment:
       AGENT_NAME:          supervisor
       REDIS_URL:           redis://redis:6379
-      DATABASE_URL:        postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB}
+      REDIS_HOST:          redis
+      REDIS_PORT:          6379
+      REDIS_CONSUMER_GROUP: ecosystem-group
+      REDIS_STREAM_PRODUCT_EVENTS: product-events
+      REDIS_STREAM_THEME_EVENTS: theme-events
+      REDIS_STREAM_ASSET_EVENTS: asset-events
+      DATABASE_URL:        postgresql://${POSTGRES_USER:-app_user}:${POSTGRES_PASSWORD:-change_me}@postgres/${POSTGRES_DB:-ar_themes}
+      POSTGRES_HOST:       postgres
+      POSTGRES_PORT:       5432
+      ANTHROPIC_API_KEY:   ${ANTHROPIC_API_KEY}
+      LANGSMITH_API_KEY:   ${LANGSMITH_API_KEY}
+      LANGSMITH_PROJECT:   ${LANGSMITH_PROJECT:-ar-themes-ecosystem}
+      TELEGRAM_BOT_TOKEN:  ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHAT_ID:    ${TELEGRAM_CHAT_ID}
+      RESEND_API_KEY:      ${RESEND_API_KEY}
+      OWNER_EMAIL:         ${OWNER_EMAIL:-owner@example.com}
+      HEARTBEAT_TIMEOUT_SEC: ${HEARTBEAT_TIMEOUT_SEC:-120}
+      HEALTH_CHECK_INTERVAL_SEC: ${HEALTH_CHECK_INTERVAL_SEC:-60}
+      ENVIRONMENT:         ${ENVIRONMENT:-development}
+      DEBUG:               ${DEBUG:-false}
+      POSTGRES_DB:         ${POSTGRES_DB:-ar_themes}
+      POSTGRES_USER:       ${POSTGRES_USER:-app_user}
+      POSTGRES_PASSWORD:   ${POSTGRES_PASSWORD:-change_me}
+      LOG_LEVEL:           ${LOG_LEVEL:-INFO}
+    command: python supervisor/agent.py
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - ./:/app
+      - visuals:/app/visuals
+    healthcheck:
+      test: ["CMD-SHELL", "python scripts/validate_env.py --scope supervisor || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  supervisor_api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ar_themes_supervisor_api
+    restart: unless-stopped
+    environment:
+      AGENT_NAME:          supervisor_api
+      REDIS_URL:           redis://redis:6379
+      DATABASE_URL:        postgresql://${POSTGRES_USER:-app_user}:${POSTGRES_PASSWORD:-change_me}@postgres/${POSTGRES_DB:-ar_themes}
       ANTHROPIC_API_KEY:   ${ANTHROPIC_API_KEY}
       LANGSMITH_API_KEY:   ${LANGSMITH_API_KEY}
       LANGSMITH_PROJECT:   ${LANGSMITH_PROJECT:-ar-themes-ecosystem}
       TELEGRAM_BOT_TOKEN:  ${TELEGRAM_BOT_TOKEN}
       TELEGRAM_CHAT_ID:    ${TELEGRAM_CHAT_ID}
       LOG_LEVEL:           ${LOG_LEVEL:-INFO}
-    command: python -m supervisor.agent
+    command: uvicorn supervisor.api:app --host 0.0.0.0 --port 8001
     depends_on:
-      redis:    { condition: service_healthy }
-      postgres: { condition: service_healthy }
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     volumes:
       - ./:/app
-      - visuals:/app/visuals
     healthcheck:
-      test: ["CMD", "python", "-c", "import redis; redis.Redis(host='redis').ping()"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD-SHELL", "curl -f http://localhost:8001/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # ── وكيل المنصة ─────────────────────────────────────────────
 
@@ -95,7 +176,7 @@ services:
       WP_API_PASSWORD:      ${WP_API_PASSWORD}
       # --- Infrastructure ---
       REDIS_URL:            redis://redis:6379
-      DATABASE_URL:         postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/platform_db
+      DATABASE_URL:         postgresql://${POSTGRES_USER:-app_user}:${POSTGRES_PASSWORD:-change_me}@postgres/${POSTGRES_DB:-ar_themes}
       # --- Email ---
       RESEND_API_KEY:       ${RESEND_API_KEY}
       STORE_EMAIL_FROM:     ${STORE_EMAIL_FROM:-نافع <hello@nafic.com>}
@@ -113,15 +194,19 @@ services:
     ports:
       - "8001:8000"
     depends_on:
-      redis:    { condition: service_healthy }
-      postgres: { condition: service_healthy }
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     volumes:
       - themes_output:/app/themes_output
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # ── وكيل الدعم ──────────────────────────────────────────────
 
@@ -134,14 +219,51 @@ services:
     environment:
       AGENT_NAME:        support
       REDIS_URL:         redis://redis:6379
-      DATABASE_URL:      postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB}
+      REDIS_HOST:        redis
+      REDIS_PORT:        6379
+      DATABASE_URL:      postgresql://${POSTGRES_USER:-app_user}:${POSTGRES_PASSWORD:-change_me}@postgres/${POSTGRES_DB:-ar_themes}
+      SUPPORT_DATABASE_URL: postgresql://${POSTGRES_USER:-app_user}:${POSTGRES_PASSWORD:-change_me}@postgres/${POSTGRES_DB:-ar_themes}
+      POSTGRES_HOST:     postgres
+      POSTGRES_PORT:     5432
+      POSTGRES_DB:       ${POSTGRES_DB:-ar_themes}
+      POSTGRES_USER:     ${POSTGRES_USER:-app_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      OPENAI_API_KEY:    ${OPENAI_API_KEY}
       LANGSMITH_API_KEY: ${LANGSMITH_API_KEY}
+      # --- HelpScout ---
+      HELPSCOUT_API_KEY:    ${HELPSCOUT_API_KEY}
+      HELPSCOUT_APP_ID:     ${HELPSCOUT_APP_ID}
+      HELPSCOUT_MAILBOX_ID: ${HELPSCOUT_MAILBOX_ID}
+      HELP_SCOUT_API_KEY:   ${HELPSCOUT_API_KEY}
+      HELP_SCOUT_MAILBOX_ID: ${HELPSCOUT_MAILBOX_ID}
+      # --- Facebook (replies) ---
+      META_ACCESS_TOKEN: ${META_ACCESS_TOKEN}
+      # --- Qdrant (semantic search) ---
+      QDRANT_URL:        http://qdrant:6333
+      QDRANT_HOST:       qdrant
+      QDRANT_PORT:       6333
+      # --- Embeddings ---
+      SUPPORT_EMBEDDING_PROVIDER:    ${SUPPORT_EMBEDDING_PROVIDER:-openai}
+      SUPPORT_EMBEDDING_BASE_URL:    ${SUPPORT_EMBEDDING_BASE_URL:-https://api.openai.com/v1}
+      SUPPORT_EMBEDDING_MODEL:       ${SUPPORT_EMBEDDING_MODEL:-text-embedding-3-small}
+      SUPPORT_EMBEDDING_VECTOR_SIZE: ${SUPPORT_EMBEDDING_VECTOR_SIZE:-1536}
+      # --- Alerts ---
+      RESEND_API_KEY:    ${RESEND_API_KEY}
+      OWNER_EMAIL:       ${OWNER_EMAIL:-owner@example.com}
+      ENVIRONMENT:       ${ENVIRONMENT:-development}
+      DEBUG:             ${DEBUG:-false}
       LOG_LEVEL:         ${LOG_LEVEL:-INFO}
-    command: python -m agents.support.agent
+    command: python agents/support/agent.py
     depends_on:
-      redis:    { condition: service_healthy }
-      postgres: { condition: service_healthy }
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      qdrant:
+        condition: service_healthy
     volumes:
       - ./:/app
       - rag_data:/app/rag_data
@@ -157,14 +279,18 @@ services:
     environment:
       AGENT_NAME:        content
       REDIS_URL:         redis://redis:6379
-      DATABASE_URL:      postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB}
+      DATABASE_URL:      postgresql://${POSTGRES_USER:-app_user}:${POSTGRES_PASSWORD:-change_me}@postgres/${POSTGRES_DB:-ar_themes}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       LANGSMITH_API_KEY: ${LANGSMITH_API_KEY}
       LOG_LEVEL:         ${LOG_LEVEL:-INFO}
-    command: python -m agents.content.agent
+    command: python agents/content/agent.py
     depends_on:
-      redis:    { condition: service_healthy }
-      postgres: { condition: service_healthy }
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     volumes:
       - ./:/app
 
@@ -179,22 +305,34 @@ services:
     environment:
       AGENT_NAME:           marketing
       REDIS_URL:            redis://redis:6379
-      DATABASE_URL:         postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB}
+      DATABASE_URL:         postgresql://${POSTGRES_USER:-app_user}:${POSTGRES_PASSWORD:-change_me}@postgres/${POSTGRES_DB:-ar_themes}
       ANTHROPIC_API_KEY:    ${ANTHROPIC_API_KEY}
       LANGSMITH_API_KEY:    ${LANGSMITH_API_KEY}
       MAILERLITE_API_KEY:   ${MAILERLITE_API_KEY}
       TWITTER_BEARER_TOKEN: ${TWITTER_BEARER_TOKEN}
       TWITTER_API_KEY:      ${TWITTER_API_KEY}
       TWITTER_API_SECRET:   ${TWITTER_API_SECRET}
-      META_ACCESS_TOKEN:    ${META_ACCESS_TOKEN}
-      META_PAGE_ID:         ${META_PAGE_ID}
-      TELEGRAM_BOT_TOKEN:   ${TELEGRAM_BOT_TOKEN}
-      TELEGRAM_CHANNEL_ID:  ${TELEGRAM_CHANNEL_ID}
-      LOG_LEVEL:            ${LOG_LEVEL:-INFO}
-    command: python -m agents.marketing.agent
+      META_ACCESS_TOKEN:      ${META_ACCESS_TOKEN}
+      META_PAGE_ID:           ${META_PAGE_ID}
+      FACEBOOK_PAGE_TOKEN:    ${FACEBOOK_PAGE_TOKEN}
+      INSTAGRAM_ACCESS_TOKEN: ${INSTAGRAM_ACCESS_TOKEN}
+      WHATSAPP_ACCESS_TOKEN:  ${WHATSAPP_ACCESS_TOKEN}
+      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID}
+      TIKTOK_ACCESS_TOKEN:    ${TIKTOK_ACCESS_TOKEN}
+      TELEGRAM_BOT_TOKEN:     ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHANNEL_ID:    ${TELEGRAM_CHANNEL_ID}
+      MARKETING_DATABASE_URL: postgresql://${POSTGRES_USER:-app_user}:${POSTGRES_PASSWORD:-change_me}@postgres/${POSTGRES_DB:-ar_themes}
+      RESEND_API_KEY:         ${RESEND_API_KEY}
+      OWNER_EMAIL:            ${OWNER_EMAIL:-owner@example.com}
+      LOG_LEVEL:              ${LOG_LEVEL:-INFO}
+    command: python agents/marketing/agent.py
     depends_on:
-      redis:    { condition: service_healthy }
-      postgres: { condition: service_healthy }
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     volumes:
       - ./:/app
 
@@ -209,7 +347,7 @@ services:
     environment:
       AGENT_NAME:        analytics
       REDIS_URL:         redis://redis:6379
-      DATABASE_URL:      postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB}
+      DATABASE_URL:      postgresql://${POSTGRES_USER:-app_user}:${POSTGRES_PASSWORD:-change_me}@postgres/${POSTGRES_DB:-ar_themes}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       LANGSMITH_API_KEY: ${LANGSMITH_API_KEY}
       GA4_PROPERTY_ID:   ${GA4_PROPERTY_ID}
@@ -218,10 +356,14 @@ services:
       WOO_CONSUMER_KEY:  ${WOO_CONSUMER_KEY}
       WOO_CONSUMER_SECRET: ${WOO_CONSUMER_SECRET}
       LOG_LEVEL:         ${LOG_LEVEL:-INFO}
-    command: python -m agents.analytics.agent
+    command: python agents/analytics/agent.py
     depends_on:
-      redis:    { condition: service_healthy }
-      postgres: { condition: service_healthy }
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     volumes:
       - ./:/app
 
@@ -236,44 +378,35 @@ services:
     environment:
       AGENT_NAME:          visual_production
       REDIS_URL:           redis://redis:6379
-      DATABASE_URL:        postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB}
+      DATABASE_URL:        postgresql://${POSTGRES_USER:-app_user}:${POSTGRES_PASSWORD:-change_me}@postgres/${POSTGRES_DB:-ar_themes}
       ANTHROPIC_API_KEY:   ${ANTHROPIC_API_KEY}
       LANGSMITH_API_KEY:   ${LANGSMITH_API_KEY}
       FLUX_API_KEY:        ${FLUX_API_KEY}
       IDEOGRAM_API_KEY:    ${IDEOGRAM_API_KEY}
       KLING_API_KEY:       ${KLING_API_KEY}
-      KLING_ACCESS_KEY:    ${KLING_ACCESS_KEY}
-      PIKA_API_KEY:        ${PIKA_API_KEY}
-      LOG_LEVEL:           ${LOG_LEVEL:-INFO}
-    command: python -m agents.visual_production.agent
+      KLING_ACCESS_KEY:     ${KLING_ACCESS_KEY}
+      PIKA_API_KEY:         ${PIKA_API_KEY}
+      VISUAL_DATABASE_URL:  postgresql://${POSTGRES_USER:-app_user}:${POSTGRES_PASSWORD:-change_me}@postgres/${POSTGRES_DB:-ar_themes}
+      RESEND_API_KEY:       ${RESEND_API_KEY}
+      OWNER_EMAIL:          ${OWNER_EMAIL:-owner@example.com}
+      VISUAL_OWNER_EMAIL:   ${VISUAL_OWNER_EMAIL:-owner@example.com}
+      STORAGE_PATH:         ${STORAGE_PATH:-/app/storage}
+      VISUAL_BUDGET_LIMIT:  ${VISUAL_BUDGET_LIMIT:-2.00}
+      CORS_ORIGINS:         ${CORS_ORIGINS:-http://localhost:3000}
+      ENVIRONMENT:          ${ENVIRONMENT:-development}
+      DEBUG:                ${DEBUG:-false}
+      LOG_LEVEL:            ${LOG_LEVEL:-INFO}
+    command: python agents/visual_production/agent.py
     depends_on:
-      redis:    { condition: service_healthy }
-      postgres: { condition: service_healthy }
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     volumes:
       - ./:/app
       - visuals:/app/visuals
-
-  # ── واجهة API ────────────────────────────────────────────────
-
-  api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: ar_themes_api
-    restart: unless-stopped
-    ports:
-      - "8000:8000"
-    environment:
-      REDIS_URL:         redis://redis:6379
-      DATABASE_URL:      postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-      LOG_LEVEL:         ${LOG_LEVEL:-INFO}
-    command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
-    depends_on:
-      redis:    { condition: service_healthy }
-      postgres: { condition: service_healthy }
-    volumes:
-      - ./:/app
 
   # ── Nginx ────────────────────────────────────────────────────
 
@@ -288,7 +421,8 @@ services:
       - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf
       - ./infrastructure/nginx/ssl:/etc/nginx/ssl
     depends_on:
-      - api
+      - platform
+      - supervisor_api
 
 # ══════════════════════════════════════════════════════════════
 # الأحجام المستمرة
@@ -297,6 +431,7 @@ services:
 volumes:
   redis_data:
   postgres_data:
+  qdrant_data:
   themes_output:
   visuals:
   rag_data:

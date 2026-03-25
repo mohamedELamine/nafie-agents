@@ -23,9 +23,12 @@ class ContentResendClient:
         from_email: Optional[str] = None,
         owner_email: Optional[str] = None,
     ):
-        resend_lib.api_key  = api_key or os.environ["RESEND_API_KEY"]
+        self._enabled       = bool(api_key or os.environ.get("RESEND_API_KEY"))
+        resend_lib.api_key  = api_key or os.environ.get("RESEND_API_KEY", "")
         self._from          = from_email  or os.environ.get("STORE_EMAIL_FROM", "hello@ar-themes.com")
         self._owner         = owner_email or os.environ.get("OWNER_EMAIL", "owner@ar-themes.com")
+        if not self._enabled:
+            logger.warning("RESEND_API_KEY missing; content email notifications are disabled")
 
     def send_review_request(
         self,
@@ -69,6 +72,9 @@ class ContentResendClient:
         return self._send(self._owner, subject, html)
 
     def _send(self, to: str, subject: str, html: str) -> bool:
+        if not self._enabled:
+            logger.info("resend.skipped to=%s subject=%s reason=disabled", to, subject)
+            return True
         try:
             resend_lib.Emails.send({
                 "from":    self._from,
@@ -104,4 +110,3 @@ def _render_review_template(ctx: dict) -> str:
     </div>
     """)
     return tmpl.safe_substitute(ctx)
-

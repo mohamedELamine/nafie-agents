@@ -1,13 +1,14 @@
-from datetime import datetime, timedelta
+import os
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from ..db import pattern_store
+from core.contracts import EVENT_ANALYTICS_SIGNAL, STREAM_ANALYTICS_SIGNALS
 from ..db import signal_store
-from ..db import report_store
+from ..db.connection import get_conn
 from ..logging_config import get_logger
-from ..models import SignalType, SignalPriority, AttributionConfidence
+from ..models import SignalType, SignalPriority
 from ..services.redis_bus import get_redis_bus
-from ..services.resend_client import send_owner_critical_alert
+from ..services.resend_client import send_owner_critical_alert as _resend_alert
 
 logger = get_logger("workflows.signal_generator")
 
@@ -16,17 +17,15 @@ def generate_signals_from_patterns(patterns: List[Any]) -> List[Any]:
     """Generate signals from detected patterns."""
     try:
         signals = []
-        
+
         for pattern in patterns:
             if pattern.pattern_type == "SALES_DROP_7D":
                 signal = create_signal(
                     signal_type=SignalType.SALES_DROP_ALERT,
-                    priority=SignalPriority.HIGH,
+                    priority=SignalPriority.IMMEDIATE,
                     target_agent="marketing_agent",
-                    theme_slug=pattern.supporting_metrics.get("current_sales", 0) == 0
-                    ? "all" 
-                    : "all",
-                    confidence=AttributionConfidence.HIGH,
+                    theme_slug="all",
+                    confidence=0.9,
                     data={
                         "current_sales": pattern.supporting_metrics.get("current_sales", 0),
                         "previous_sales": pattern.supporting_metrics.get("previous_sales", 0),
@@ -35,14 +34,14 @@ def generate_signals_from_patterns(patterns: List[Any]) -> List[Any]:
                     },
                 )
                 signals.append(signal)
-            
+
             elif pattern.pattern_type == "BEST_CHANNEL_30D":
                 signal = create_signal(
                     signal_type=SignalType.BEST_CHANNEL,
-                    priority=SignalPriority.LOW,
+                    priority=SignalPriority.WEEKLY,
                     target_agent="marketing_agent",
                     theme_slug="all",
-                    confidence=AttributionConfidence.MEDIUM,
+                    confidence=0.6,
                     data={
                         "best_channel": pattern.supporting_metrics.get("best_channel"),
                         "sales_count": pattern.supporting_metrics.get("sales_count"),
@@ -50,11 +49,11 @@ def generate_signals_from_patterns(patterns: List[Any]) -> List[Any]:
                     },
                 )
                 signals.append(signal)
-        
-        # Send signals to agents and owners
+
+        # Send signals to agents
         for signal in signals:
             send_to_target_agent(signal)
-        
+
         logger.info(f"Generated {len(signals)} signals from patterns")
         return signals
 
@@ -73,16 +72,15 @@ def emit_immediate_signal(
     try:
         signal = create_signal(
             signal_type=signal_type,
-            priority=SignalPriority.MEDIUM,
+            priority=SignalPriority.IMMEDIATE,
             target_agent=target_agent,
             theme_slug=theme_slug,
-            confidence=AttributionConfidence.MEDIUM,
+            confidence=0.6,
             data=data,
         )
-        
-        # Send to target agent
+
         send_to_target_agent(signal)
-        
+
         logger.info(f"Emitted immediate signal: {signal_type.value}")
 
     except Exception as e:
@@ -92,32 +90,61 @@ def emit_immediate_signal(
 def send_to_target_agent(signal: Any) -> None:
     """Send a signal to the target agent via Redis."""
     try:
-        redis_bus = get_redis_bus(redis_url="redis://localhost:6379/0")
-        
-        # Publish to agent-specific channel
-        channel = f"agent:{signal.target_agent}:signals"
-        redis_bus.publish(channel, signal.__dict__)
-        
-        # Mark as sent
-        signal_store.mark_signal_sent(
-            redis_bus.client,
-            signal.signal_id,
+        redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+        redis_bus = get_redis_bus(redis_url=redis_url)
+        signal_dict = {
+            "signal_id": signal.signal_id,
+            "signal_type": signal.signal_type.value,
+            "priority": signal.priority.value,
+            "target_agent": signal.target_agent,
+            "theme_slug": signal.theme_slug,
+            "data": signal.data,
+            "generated_at": signal.generated_at.isoformat(),
+        }
+
+        with get_conn() as conn:
+            if signal_store.signal_sent_recently(
+                conn,
+                signal.signal_type.value,
+                signal.theme_slug,
+            ):
+                logger.debug(f"Signal already sent recently, skipping: {signal.signal_id}")
+                return
+
+            signal_store.save_signal(
+                conn,
+                {
+                    **signal_dict,
+                    "confidence": signal.confidence,
+                    "channel": signal.channel,
+                    "recommendation": signal.recommendation,
+                    "supporting_pattern_id": signal.supporting_pattern_id,
+                    "sent_at": None,
+                },
+            )
+            signal_store.mark_signal_sent(conn, signal.signal_id)
+
+        redis_bus.publish_stream(
+            STREAM_ANALYTICS_SIGNALS,
+            {
+                "event_type": EVENT_ANALYTICS_SIGNAL,
+                "source": "analytics_agent",
+                **signal_dict,
+            },
         )
-        
+
         logger.debug(f"Sent signal to {signal.target_agent}: {signal.signal_id}")
 
     except Exception as e:
         logger.error(f"Error sending signal to target agent: {e}")
 
 
-def send_owner_critical_alert(
+def send_owner_critical_alert_for_signal(
     signal_type: SignalType,
     data: Dict[str, Any],
 ) -> None:
     """Send critical alert to owner via Resend."""
     try:
-        import os
-        
         subject = f"CRITICAL: {signal_type.value}"
         body = f"""
         <h1>{signal_type.value}</h1>
@@ -126,14 +153,14 @@ def send_owner_critical_alert(
         <h2>Details:</h2>
         <pre>{data}</pre>
         """
-        
-        success = send_owner_critical_alert(
+
+        success = _resend_alert(
             api_key=os.getenv("RESEND_API_KEY", ""),
             owner_email=os.getenv("OWNER_EMAIL", "owner@example.com"),
             subject=subject,
             body=body,
         )
-        
+
         if success:
             logger.info(f"Sent owner critical alert for {signal_type.value}")
         else:
@@ -143,26 +170,41 @@ def send_owner_critical_alert(
         logger.error(f"Error sending owner critical alert: {e}")
 
 
+def send_owner_critical_alert(
+    signal_type: SignalType,
+    data: Dict[str, Any],
+) -> None:
+    """Backward-compatible export used by workflows package."""
+    send_owner_critical_alert_for_signal(signal_type=signal_type, data=data)
+
+
 def create_signal(
     signal_type: SignalType,
     priority: SignalPriority,
     target_agent: str,
     theme_slug: str,
-    confidence: AttributionConfidence,
+    confidence: float,
     data: Dict[str, Any],
+    channel: Optional[str] = None,
+    recommendation: str = "",
+    supporting_pattern_id: Optional[str] = None,
 ) -> Any:
     """Create a new analytics signal."""
     from ..models import AnalyticsSignal
-    
+
+    generated_at = datetime.now(timezone.utc)
     signal = AnalyticsSignal(
-        signal_id=f"{signal_type.value}_{int(datetime.utcnow().timestamp())}",
+        signal_id=f"{signal_type.value}_{int(generated_at.timestamp())}",
         signal_type=signal_type,
         priority=priority,
         target_agent=target_agent,
         theme_slug=theme_slug,
+        channel=channel,
+        recommendation=recommendation,
         confidence=confidence,
+        supporting_pattern_id=supporting_pattern_id,
         data=data,
-        generated_at=datetime.utcnow(),
+        generated_at=generated_at,
     )
-    
+
     return signal

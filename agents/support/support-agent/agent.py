@@ -2,12 +2,20 @@
 Support agent — LangGraph StateGraph pipeline.
 Routing: HelpScout/Facebook tickets → classify → retrieve → answer / escalate.
 """
+import asyncio
+import os
+import sys
 from typing import Any, Dict, List, Optional
 
 from langgraph.graph import END, START, StateGraph
 from typing_extensions import TypedDict
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+from core.base_agent import BaseAgent
+from core.state import AgentName, BusinessEvent, EventType
+
 from .logging_config import get_logger
+from .nodes.intent_classifier import make_intent_classifier_node
 from .nodes.ticket_receiver import make_ticket_receiver_node
 from .nodes.knowledge_retriever import make_knowledge_retriever_node
 from .nodes.escalation_handler import make_escalation_handler_node
@@ -52,10 +60,7 @@ class SupportState(TypedDict, total=False):
 
 def _route_by_platform(state: SupportState) -> str:
     """Route incoming ticket by platform."""
-    platform = state.get("platform", "helpscout")
-    if platform == "facebook":
-        return "facebook_flow"
-    return "helpscout_flow"
+    return "triage_flow"
 
 
 def _route_after_risk(state: SupportState) -> str:
@@ -64,20 +69,6 @@ def _route_after_risk(state: SupportState) -> str:
     if level in ("medium", "high", "critical"):
         return "escalation_handler"
     return "ticket_updater"
-
-
-# ---------------------------------------------------------------------------
-# Placeholder nodes for class-based nodes not yet refactored
-# (they implement __call__ so LangGraph can invoke them directly)
-# ---------------------------------------------------------------------------
-
-def _make_noop_node(name: str):
-    """Return a no-op node that passes state through unchanged."""
-    def noop(state: SupportState) -> SupportState:
-        logger.debug(f"noop node: {name}")
-        return state
-    noop.__name__ = name
-    return noop
 
 
 # ---------------------------------------------------------------------------
@@ -102,15 +93,12 @@ def build_support_graph(
         helpscout_client, resend_client, redis_bus
     )
 
-    # Class-based nodes (implement __call__) — used directly
-    # These will be replaced with factory functions in future refactors
-    from .nodes.intent_classifier import TicketReceiverNode as _IntentDummy
     from .nodes.risk_flagger import RiskFlaggerNode
     from .nodes.ticket_updater import TicketUpdaterNode
 
-    intent_classifier_node = RiskFlaggerNode(claude_client)   # wraps claude for risk+intent
+    intent_classifier_node = make_intent_classifier_node(claude_client)
     risk_flagger_node      = RiskFlaggerNode(claude_client)
-    ticket_updater_node    = TicketUpdaterNode(helpscout_client, redis_bus)
+    ticket_updater_node    = TicketUpdaterNode(helpscout_client, redis_bus, facebook_client)
 
     # --- build graph ---------------------------------------------------------
     graph = StateGraph(SupportState)
@@ -119,15 +107,12 @@ def build_support_graph(
     graph.add_node("ticket_receiver", ticket_receiver)
 
     # HelpScout flow
-    graph.add_node("intent_classifier", risk_flagger_node)   # classifies intent via claude
+    graph.add_node("intent_classifier", intent_classifier_node)
     graph.add_node("risk_flagger", risk_flagger_node)
     graph.add_node("knowledge_retriever", knowledge_retriever)
     graph.add_node("disclaimer_adder", disclaimer_adder)
     graph.add_node("escalation_handler", escalation_handler)
     graph.add_node("ticket_updater", ticket_updater_node)
-
-    # Facebook flow (no-op placeholder — replace when facebook nodes are refactored)
-    graph.add_node("facebook_flow", _make_noop_node("facebook_flow"))
 
     # --- edges ---------------------------------------------------------------
     graph.add_edge(START, "ticket_receiver")
@@ -137,19 +122,18 @@ def build_support_graph(
         "ticket_receiver",
         _route_by_platform,
         {
-            "helpscout_flow": "intent_classifier",
-            "facebook_flow":  "facebook_flow",
+            "triage_flow": "intent_classifier",
         },
     )
 
-    # HelpScout linear flow: classify → flag → retrieve → disclaimer → route
-    graph.add_edge("intent_classifier", "risk_flagger")
-    graph.add_edge("risk_flagger",      "knowledge_retriever")
+    # HelpScout linear flow: classify → retrieve → disclaimer → flag → route
+    graph.add_edge("intent_classifier", "knowledge_retriever")
     graph.add_edge("knowledge_retriever", "disclaimer_adder")
+    graph.add_edge("disclaimer_adder", "risk_flagger")
 
-    # Branch after disclaimer: escalate or reply
+    # Branch after risk evaluation: escalate or reply
     graph.add_conditional_edges(
-        "disclaimer_adder",
+        "risk_flagger",
         _route_after_risk,
         {
             "escalation_handler": "escalation_handler",
@@ -159,7 +143,6 @@ def build_support_graph(
 
     graph.add_edge("escalation_handler", END)
     graph.add_edge("ticket_updater",     END)
-    graph.add_edge("facebook_flow",      END)
 
     return graph.compile()
 
@@ -208,3 +191,59 @@ def run_support_pipeline(
     except Exception as e:
         logger.error(f"Pipeline error for ticket {ticket_data.get('ticket_id')}: {e}")
         return {"success": False, "error": str(e)}
+
+
+# ── BaseAgent subclass ─────────────────────────────────────────────
+
+class SupportAgent(BaseAgent):
+    """Support agent — inherits BaseAgent for Redis, heartbeats, and supervision."""
+
+    agent_name = AgentName.SUPPORT
+
+    def __init__(self):
+        super().__init__()
+        # Initialise external clients from service factories (env-driven)
+        from .services import (
+            get_helpscout_client,
+            get_claude_client,
+            get_qdrant_client,
+            get_redis_bus,
+            ResendClient,
+        )
+        import os
+        self._helpscout = get_helpscout_client()
+        self._claude    = get_claude_client()
+        self._qdrant    = get_qdrant_client()
+        self._resend    = ResendClient(
+            api_key=os.environ.get("RESEND_API_KEY", ""),
+            owner_email=os.environ.get("OWNER_EMAIL", ""),
+        )
+        # redis_bus: reuse the BaseAgent bus (already connected to Redis)
+        self._redis_bus = get_redis_bus()
+
+    async def setup_handlers(self) -> None:
+        self.bus.on(EventType.TICKET_CREATED, self.run)
+
+    async def run(self, event: BusinessEvent) -> None:
+        try:
+            result = run_support_pipeline(
+                ticket_data=event["payload"],
+                helpscout_client=self._helpscout,
+                claude_client=self._claude,
+                qdrant_client=self._qdrant,
+                resend_client=self._resend,
+                redis_bus=self._redis_bus,
+            )
+            if result.get("success"):
+                await self.emit(
+                    EventType.TICKET_RESOLVED,
+                    result,
+                    trace_id=event.get("trace_id"),
+                )
+        except Exception as e:
+            await self.emit_error(str(e), trace_id=event.get("trace_id"))
+
+
+if __name__ == "__main__":
+    agent = SupportAgent()
+    asyncio.run(agent.start())

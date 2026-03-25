@@ -1,18 +1,16 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
-import json
 
 from logging_config import configure_logging, get_logger
-from models import WorkflowStatus, WorkflowType
+from models import WorkflowStatus
 from db.workflow_store import workflow_store
 from db.audit_store import audit_store
 from db.health_store import health_store
 from db.policy_store import policy_store
 from db.conflict_store import conflict_store
-from agent_registry import AGENT_REGISTRY
+from workflows.orchestrator import orchestrator
 
 configure_logging()
 logger = get_logger(__name__)
@@ -40,7 +38,7 @@ async def root():
         "service": "supervisor-agent",
         "version": "1.0.0",
         "status": "running",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -50,7 +48,7 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "supervisor-agent",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -64,9 +62,9 @@ async def list_workflows(status: Optional[WorkflowStatus] = None):
             workflows = workflow_store.get_active_workflows()
 
         return {
-            "workflows": [self._workflow_to_dict(w) for w in workflows],
+            "workflows": [_workflow_to_dict(w) for w in workflows],
             "count": len(workflows),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except Exception as e:
@@ -84,8 +82,8 @@ async def get_workflow(instance_id: str):
             raise HTTPException(status_code=404, detail="Workflow not found")
 
         return {
-            "workflow": self._workflow_to_dict(workflow),
-            "timestamp": datetime.utcnow().isoformat(),
+            "workflow": _workflow_to_dict(workflow),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except HTTPException:
@@ -117,9 +115,9 @@ async def start_workflow(request: dict):
             )
 
             return {
-                "instance": self._workflow_to_dict(instance),
+                "instance": _workflow_to_dict(instance),
                 "status": "started",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
 
         except ValueError as e:
@@ -141,7 +139,7 @@ async def cancel_workflow(instance_id: str, reason: Optional[str] = None):
         return {
             "status": "cancelled",
             "instance_id": instance_id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except Exception as e:
@@ -168,7 +166,7 @@ async def get_agents_health():
                 }
                 for name, health in all_health.items()
             },
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except Exception as e:
@@ -180,14 +178,14 @@ async def get_agents_health():
 async def get_audit_log(category: Optional[str] = None, since: Optional[str] = None):
     """Get audit log with filtering"""
     try:
-        from datetime import datetime
+        from datetime import datetime, timezone
 
         # Parse since parameter
         since_dt = None
         if since:
             try:
                 since_dt = datetime.fromisoformat(since)
-            except:
+            except Exception:
                 pass
 
         # Get audit log
@@ -201,9 +199,9 @@ async def get_audit_log(category: Optional[str] = None, since: Optional[str] = N
             audit_log = audit_store.get_audit_log()
 
         return {
-            "audit": [self._audit_log_to_dict(a) for a in audit_log],
+            "audit": [_audit_log_to_dict(a) for a in audit_log],
             "count": len(audit_log),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except Exception as e:
@@ -218,9 +216,9 @@ async def get_policies():
         policies = policy_store.get_active_policies()
 
         return {
-            "policies": [self._policy_to_dict(p) for p in policies],
+            "policies": [_policy_to_dict(p) for p in policies],
             "count": len(policies),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except Exception as e:
@@ -257,7 +255,7 @@ async def update_policy(policy_id: str, policy_data: dict):
         return {
             "status": "updated",
             "policy_id": policy_id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except HTTPException:
@@ -274,9 +272,9 @@ async def get_open_conflicts():
         conflicts = conflict_store.get_open_conflicts()
 
         return {
-            "conflicts": [self._conflict_to_dict(c) for c in conflicts],
+            "conflicts": [_conflict_to_dict(c) for c in conflicts],
             "count": len(conflicts),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     except Exception as e:
@@ -301,7 +299,7 @@ def _workflow_to_dict(workflow) -> dict:
         "failure_reason": workflow.failure_reason,
         "retry_count": workflow.retry_count,
         "context": workflow.context,
-        "step_history": [self._step_to_dict(s) for s in workflow.step_history],
+        "step_history": [_step_to_dict(s) for s in workflow.step_history],
     }
 
 

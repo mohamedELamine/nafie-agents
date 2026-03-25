@@ -16,3 +16,6 @@ venv/
 
 # Session / logs
 .remember/
+
+# Nested git repos (no remote — tracked separately if needed)
+agents/builder/arabic-theme-factory/

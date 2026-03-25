@@ -1,6 +1,5 @@
 import json
-import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import redis
@@ -63,6 +62,18 @@ class RedisBus:
             logger.error(f"Error publishing to {channel}: {e}")
             return None
 
+    def publish_stream(self, stream: str, message: Dict[str, Any]) -> Optional[str]:
+        """Publish a message to a stream using the shared data field wrapper."""
+        try:
+            self.ensure_consumer_group(stream, "analytics-agent")
+            payload = json.dumps(message, default=str)
+            message_id = self.client.xadd(stream, {"data": payload})
+            logger.debug(f"Published to stream {stream}: {message.get('event_type')}")
+            return message_id
+        except RedisError as e:
+            logger.error(f"Error publishing to stream {stream}: {e}")
+            return None
+
     def read_group(
         self,
         stream: str,
@@ -74,6 +85,7 @@ class RedisBus:
     ) -> List[Dict[str, Any]]:
         """Read messages from a stream using consumer group."""
         try:
+            self.ensure_consumer_group(stream, consumer_group)
             messages = self.client.xreadgroup(
                 groupname=consumer_group,
                 consumername=consumer_name,
@@ -85,15 +97,33 @@ class RedisBus:
             events = []
             for stream_name, stream_messages in messages:
                 for message_id, data in stream_messages:
-                    # Store message ID for ack
-                    data["__message_id"] = message_id
-                    events.append(data)
+                    if "data" in data:
+                        try:
+                            parsed = json.loads(data["data"])
+                        except (TypeError, json.JSONDecodeError):
+                            parsed = dict(data)
+                    else:
+                        parsed = dict(data)
+                    parsed["__message_id"] = message_id
+                    events.append(parsed)
 
             return events
 
         except RedisError as e:
             logger.error(f"Error reading from stream {stream}: {e}")
             return []
+
+    def ensure_consumer_group(self, stream: str, consumer_group: str) -> None:
+        """Ensure a consumer group exists for the requested stream."""
+        try:
+            if not self.client.exists(stream):
+                self.client.xadd(stream, {"init": "true"})
+            try:
+                self.client.xgroup_create(stream, consumer_group, id="0", mkstream=True)
+            except redis.exceptions.ResponseError:
+                pass
+        except RedisError as e:
+            logger.error(f"Error ensuring consumer group for {stream}: {e}")
 
     def ack(self, stream: str, message_id: str) -> None:
         """Acknowledge a message from a stream."""
@@ -119,7 +149,7 @@ class RedisBus:
             "theme_slug": theme_slug,
             "raw_data": raw_data,
             "occurred_at": occurred_at.isoformat(),
-            "received_at": datetime.utcnow().isoformat(),
+            "received_at": datetime.now(timezone.utc).isoformat(),
         }
 
 

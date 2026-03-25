@@ -1,10 +1,11 @@
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict
 
 from ..db import metric_store
-from ..db import signal_store
 from ..db import report_store
 from ..db import event_store
+from ..db import pattern_store
+from ..db.connection import get_conn
 from ..logging_config import get_logger
 from ..services.resend_client import send_weekly_report
 
@@ -20,31 +21,31 @@ def generate_weekly_report(
         logger.info(f"Generating weekly report: {period_start} to {period_end}")
 
         # Get metrics for the period
-        metrics = metric_store.get_period_metrics(
-            period_start=period_start,
-            period_end=period_end,
-            granularity="day",
-        )
+        with get_conn() as conn:
+            metrics = metric_store.get_period_metrics(
+                conn=conn,
+                period_start=period_start,
+                period_end=period_end,
+                granularity="day",
+            )
+
+            sales_events = event_store.get_events(
+                conn=conn,
+                event_type="NEW_SALE",
+                since=period_start,
+                before=period_end,
+                limit=1000,
+            )
+
+            patterns = pattern_store.get_recent_patterns(
+                conn=conn,
+                limit=10,
+                days=(period_end - period_start).days,
+            )
 
         # Aggregate metrics
-        total_sales = 0
-        total_revenue = 0.0
-
-        sales_events = event_store.get_events(
-            event_type="NEW_SALE",
-            since=period_start,
-            since_before=period_end,
-            limit=1000,
-        )
-
         total_sales = len(sales_events)
         total_revenue = sum(e["raw_data"].get("amount_usd", 0.0) for e in sales_events)
-
-        # Get recent patterns
-        patterns = pattern_store.get_recent_patterns(
-            limit=10,
-            days=(period_end - period_start).days,
-        )
 
         # Extract highlights and concerns
         highlights = []
@@ -65,16 +66,12 @@ def generate_weekly_report(
             "total_revenue": total_revenue,
             "highlights": highlights[:5],
             "concerns": concerns[:5],
-            "generated_at": datetime.utcnow(),
+            "generated_at": datetime.now(timezone.utc),
         }
 
         # Save report to database
-        report_store.save_report(
-            __import__("psycopg2").connect(
-                "postgresql://analytics:password@localhost:5432/analytics_db"
-            ),
-            report,
-        )
+        with get_conn() as conn:
+            report_store.save_report(conn, report)
 
         # Send report to owner
         _send_report_email(report)

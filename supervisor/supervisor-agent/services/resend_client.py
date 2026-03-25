@@ -1,6 +1,7 @@
 import logging
+import json
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 logger = logging.getLogger("supervisor.resend_client")
 
@@ -51,7 +52,7 @@ class ResendClient:
                     <h2 style="color: red;">{alert_type}</h2>
                     <p><strong>Details:</strong></p>
                     <pre style="background: #f5f5f5; padding: 10px;">{json.dumps(details, indent=2)}</pre>
-                    <p>Time: {datetime.utcnow().isoformat()}</p>
+                    <p>Time: {datetime.now(timezone.utc).isoformat()}</p>
                 </body>
                 </html>
                 """
@@ -92,7 +93,7 @@ class ResendClient:
             Workflow: {workflow_type}
             Status: {status}
             Workflow ID: {workflow_id}
-            Time: {datetime.utcnow().isoformat()}
+            Time: {datetime.now(timezone.utc).isoformat()}
 
             Details:
             {json.dumps(details, indent=2)}

@@ -1,9 +1,8 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel
 
-from .models import ExecutionLog, EscalationRecord, KnowledgeUpdate
 
 
 class SupportState(BaseModel):
@@ -48,7 +47,7 @@ def update_state_with_ticket(state: SupportState, ticket: Any) -> SupportState:
     return SupportState(
         ticket=ticket,
         platform=ticket.platform if hasattr(ticket, "platform") else None,
-        execution_id=f"execution_{int(datetime.utcnow().timestamp())}",
+        execution_id=f"execution_{int(datetime.now(timezone.utc).timestamp())}",
         events=[],
     )
 
@@ -138,7 +137,7 @@ def update_state_with_execution_status(
     new_events = list(state.events)
     new_events.append(
         {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "status": status,
             "error": error,
         }

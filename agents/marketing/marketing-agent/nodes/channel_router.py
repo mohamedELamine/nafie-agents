@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from ..models import MarketingChannel
 from ..logging_config import get_logger
