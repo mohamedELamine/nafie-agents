@@ -42,51 +42,33 @@ jobs:
           python-version: "3.12"
 
       - name: Install test dependencies
-        run: pip install -r requirements.txt pytest psycopg2-binary pydantic-settings
-
-      - name: Run analytics and support tests
-        shell: bash
         run: |
-          set +e
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pydantic psycopg2-binary anthropic redis
 
-          cd "$GITHUB_WORKSPACE/agents/analytics/analytics-agent"
-          python -m pytest tests/ -q > "$RUNNER_TEMP/analytics-tests.txt" 2>&1
-          analytics_status=$?
-          cat "$RUNNER_TEMP/analytics-tests.txt"
+      - name: Run analytics-agent tests
+        working-directory: agents/analytics/analytics-agent
+        run: python -m pytest tests/ -q
 
-          cd "$GITHUB_WORKSPACE/agents/support/support-agent"
-          python -m pytest tests/ -q > "$RUNNER_TEMP/support-tests.txt" 2>&1
-          support_status=$?
-          cat "$RUNNER_TEMP/support-tests.txt"
+      - name: Run support-agent tests
+        working-directory: agents/support/support-agent
+        run: python -m pytest tests/ -q
 
-          echo "$analytics_status" > "$RUNNER_TEMP/analytics-status.txt"
-          echo "$support_status" > "$RUNNER_TEMP/support-status.txt"
+      - name: Run marketing-agent tests
+        working-directory: agents/marketing/marketing-agent
+        run: python -m pytest tests/ -q
 
-          if [ "$analytics_status" -ne 0 ] || [ "$support_status" -ne 0 ]; then
-            exit 1
-          fi
+      - name: Run content-agent tests
+        working-directory: agents/content/content-agent
+        run: python -m pytest tests/ -q
 
-      - name: Publish combined summary
-        if: always()
-        shell: bash
-        run: |
-          {
-            echo "## Unit Test Summary"
-            echo
-            echo "### Analytics"
-            if [ -f "$RUNNER_TEMP/analytics-tests.txt" ]; then
-              cat "$RUNNER_TEMP/analytics-tests.txt"
-            else
-              echo "Analytics tests did not run."
-            fi
-            echo
-            echo "### Support"
-            if [ -f "$RUNNER_TEMP/support-tests.txt" ]; then
-              cat "$RUNNER_TEMP/support-tests.txt"
-            else
-              echo "Support tests did not run."
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Run visual_production-agent tests
+        working-directory: agents/visual_production/visual-production-agent
+        run: python -m pytest tests/ -q
+
+      - name: Run platform-agent tests
+        working-directory: agents/platform/platform-agent
+        run: python -m pytest tests/ -q
 
   smoke-tests:
     runs-on: ubuntu-latest
