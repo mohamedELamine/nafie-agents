@@ -62,6 +62,7 @@ class ManifestBuilderNode:
             "status": "published",
             "assets_count": len(manifest["assets"]),
             "event_published": True,
+            "manifest": manifest,
         }
 
 

@@ -5,6 +5,7 @@ Node: LAUNCH_ANNOUNCER — T052
 """
 from __future__ import annotations
 import logging
+from datetime import datetime, timezone
 from core.contracts import EVENT_NEW_PRODUCT_LIVE, STREAM_PRODUCT_EVENTS
 from db.idempotency import check_completed, mark_completed, mark_started
 from db.registry import ProductRegistry
@@ -43,7 +44,7 @@ def make_launch_announcer_node(
                 "ls_product_id": ls_product_id,
                 "pricing": {"single": 29, "unlimited": 79, "vip": 299},
                 "theme_contract": state.get("theme_contract", {}),
-                "launched_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat() + "Z",
+                "launched_at": datetime.now(timezone.utc).isoformat(),
             },
             correlation_id=state.get("approved_event_id"),
         )

@@ -1,5 +1,6 @@
 import asyncio
 import importlib.util
+from datetime import datetime, timezone
 import pathlib
 import sys
 from unittest.mock import AsyncMock, MagicMock
@@ -57,3 +58,57 @@ def test_manifest_builder_publishes_assets_ready_to_asset_stream():
         stream_name=STREAM_ASSET_EVENTS,
         data={"event_type": EVENT_THEME_ASSETS_READY, "data": {"theme_slug": "theme-one"}},
     )
+
+
+def test_manifest_builder_returns_manifest_with_required_fields():
+    redis_bus = MagicMock()
+    redis_bus.build_event = AsyncMock(
+        return_value={"event_type": EVENT_THEME_ASSETS_READY, "data": {"theme_slug": "theme-one"}}
+    )
+    redis_bus.publish_stream = AsyncMock(return_value=True)
+
+    node = ManifestBuilderNode(redis_bus)
+    result = asyncio.run(
+        node(
+            batch_id="batch_1",
+            theme_slug="theme-one",
+            approved_assets={
+                "assets": [
+                    {
+                        "asset_id": "asset_1",
+                        "type": "hero_image",
+                        "url": "/assets/hero/asset_1.webp",
+                        "size_kb": 128,
+                        "quality_score": 0.92,
+                    }
+                ]
+            },
+        )
+    )
+
+    manifest = result["manifest"]
+    assert manifest["batch_id"] == "batch_1"
+    assert manifest["theme_slug"] == "theme-one"
+    assert manifest["status"] == "published"
+    assert manifest["assets"][0]["asset_id"] == "asset_1"
+    assert datetime.fromisoformat(manifest["published_at"]).tzinfo == timezone.utc
+
+
+def test_manifest_builder_uses_timezone_aware_published_at():
+    redis_bus = MagicMock()
+    redis_bus.build_event = AsyncMock(
+        return_value={"event_type": EVENT_THEME_ASSETS_READY, "data": {"theme_slug": "theme-one"}}
+    )
+    redis_bus.publish_stream = AsyncMock(return_value=True)
+
+    node = ManifestBuilderNode(redis_bus)
+    result = asyncio.run(
+        node(
+            batch_id="batch_1",
+            theme_slug="theme-one",
+            approved_assets={"assets": []},
+        )
+    )
+
+    published_at = result["manifest"]["published_at"]
+    assert datetime.fromisoformat(published_at).tzinfo == timezone.utc

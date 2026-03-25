@@ -86,6 +86,11 @@ def _install_supporting_stubs():
 
     agent_module = types.ModuleType("agent")
     sys.modules["agent"] = agent_module
+    visual_pkg = types.ModuleType("visual_production_agent")
+    visual_pkg.__path__ = [str(AGENT_ROOT)]
+    visual_pkg.__package__ = "visual_production_agent"
+    sys.modules["visual_production_agent"] = visual_pkg
+    sys.modules["visual_production_agent.agent"] = agent_module
     return db_module, agent_module
 
 

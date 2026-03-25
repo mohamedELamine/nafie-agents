@@ -224,6 +224,18 @@ class ClaudeContentClient:
             target_agent      = request.target_agent,
         )
 
+    def generate_content(
+        self,
+        request: ContentRequest,
+        plan: ContentPlan,
+        fact_sheet: FactSheet,
+        template: Optional[ContentTemplate] = None,
+    ) -> List[ContentPiece]:
+        """Compatibility wrapper: returns a list in all generation modes."""
+        if plan.variant_count > 1 or request.output_mode == "variants":
+            return self.generate_variants(request, plan, fact_sheet, template)
+        return [self.generate_single(request, plan, fact_sheet, template)]
+
     def generate_variants(
         self,
         request:   ContentRequest,
@@ -290,10 +302,45 @@ class ClaudeContentClient:
             if raw.startswith("json"):
                 raw = raw[4:]
 
-        data       = json.loads(raw)
         versioning = _build_versioning_dict(plan)
-        now        = __import__("datetime").datetime.now(timezone.utc)
-        pieces     = []
+        now = datetime.now(timezone.utc)
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            logger.warning(
+                "generate_variants.invalid_json request=%s err=%s",
+                request.request_id,
+                exc,
+            )
+            return [
+                ContentPiece(
+                    content_id=str(uuid.uuid4()),
+                    request_id=request.request_id,
+                    content_type=request.content_type,
+                    variant_label=label,
+                    theme_slug=request.theme_slug,
+                    title=None,
+                    body=_generate_body_offline(request.theme_slug, plan.channel_style, index),
+                    metadata={
+                        "word_count": count_words(
+                            _generate_body_offline(request.theme_slug, plan.channel_style, index)
+                        ),
+                        "generated_mode": "fallback",
+                    },
+                    versioning=versioning,
+                    structural_score=0.0,
+                    language_score=0.0,
+                    factual_score=0.0,
+                    validation_score=0.0,
+                    validation_issues=[],
+                    status=ContentStatus.VALIDATING,
+                    created_at=now,
+                    target_agent=request.target_agent,
+                )
+                for index, label in enumerate(["A", "B", "C"][: plan.variant_count], start=1)
+            ]
+
+        pieces = []
 
         for v in data.get("variants", []):
             body = v.get("body", "")
